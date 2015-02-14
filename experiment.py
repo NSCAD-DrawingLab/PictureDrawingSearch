@@ -3,11 +3,13 @@ __author__ = "EXPERIMENTER_NAME"
 import klibs
 from klibs import Params
 from klibs.KLNumpySurface import *
+from klibs.KLUtilities import *
 import random
-Params.screen_x = 2560
-Params.screen_y = 1440
+Params.screen_x = 1440
+Params.screen_y = 900
 # Params.default_fill_color = (125, 125, 125, 255)
 
+Params.debug_level = 2
 Params.collect_demographics = True
 Params.practicing = True
 Params.eye_tracking = True
@@ -18,8 +20,7 @@ Params.blocks_per_experiment = 1
 Params.trials_per_block = 96
 Params.practice_blocks = None
 Params.trials_per_practice_block = None
-Params.exp_meta_factors = { "stim_size": [10, 8, 4], # degrees of visual angle
-							"fixation": []}
+
 BG_CIRCLE = 0
 BG_SQUARE = 1
 FIG_SQUARE = "FIG_S"
@@ -33,6 +34,11 @@ OR_RIGHT = "ORI_D"
 FULL = "MASK_F"
 CENTRAL = "MASK_C"
 PERIPHERAL = "MASK_P"
+FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
+FIX_CENTRAL = Params.screen_c
+FiX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
+Params.exp_meta_factors = {"stim_size": [10, 8, 4], # degrees of visual angle
+						   "fixation": [FIX_TOP, FIX_CENTRAL, FiX_BOTTOM]}
 Params.exp_factors = [("mask", [FULL, CENTRAL, PERIPHERAL]),
 					  ("figure", [FIG_SQUARE, FIG_CIRCLE, FIG_D, FIG_TRIANGLE ]),
 					  ("background", [BG_CIRCLE, BG_SQUARE]),
@@ -40,29 +46,15 @@ Params.exp_factors = [("mask", [FULL, CENTRAL, PERIPHERAL]),
 					]
 
 
-class RGBCLI:
-	col = {"@P": '\033[95m', # purple
-		   "@B": '\033[94m', # blue
-		   "@R": '\033[91m', # red
-		   "@T": '\033[1m',  # teal
-		   "@E": '\033[0m'   # return to normal
-	}
-
-	def pr(self, str):
-		for col in self.col:
-			str = str.replace(col, self.col[col])
-		print "{0}{1}".format(str, self.col["@E"])
-
-
-def pr(str):
-	rgb = RGBCLI()
-	rgb.pr(str)
-
-
 class FGSearch(klibs.Experiment):
 	stim_size = None
 	bg_element_size = 0.2  # degrees of visual angle
 	bg_element_padding = 0.2  # degrees of visual angle
+
+	neutral_color = (127, 127, 127)
+
+	# trial vars
+	timed_out = False
 
 	def __init__(self, *args, **kwargs):
 		klibs.Experiment.__init__(self, *args, **kwargs)
@@ -102,7 +94,7 @@ class FGSearch(klibs.Experiment):
 		self.message("Press any key to advance...", color=(255, 255, 255, 255), location="center", font_size=48,
 					 flip=False)
 		self.listen()
-		self.drift_correct(tuple(Params.exp_meta_factors['fixation'][Params.trial_number % 3]))
+		self.drift_correct(tuple(random.choice(Params.exp_meta_factors['fixation'])))
 		pr("@BExperiment.trial_prep() exiting")
 
 	def trial(self, trial_factors, trial_num):
@@ -110,21 +102,25 @@ class FGSearch(klibs.Experiment):
 		trial_factors: 0 = mask, 1 = figure, 2 = background, 3 = orientation, 4 = fixation]
 		"""
 		pr("@PExperiment.trial() reached")
-		pr("@T\ttrial_factors: {0}".format(trial_factors))
-
+		pr("@T\ttrial_factors: {0}".format(trial_factors[1]))
 		self.eyelink.start(trial_num)
-		bg = self.texture(trial_factors[2])
-		self.fill()
-		self.blit(bg, 5, 'center')
-		# self.blit(mask, 5, 'center')
-		# self.flip()
-
-		# upd = {"bg": bg, "mask": mask}
+		texture = self.texture(trial_factors[3])
+		if trial_factors[2] != FIG_SQUARE:  # texture already is square, nothing to mask
+			texture_mask = self.figure(trial_factors[2])
+			pr("@T TextureMask: {0},  texture: {1}".format(texture_mask, texture))
+			texture.mask(texture_mask, (0, 0))
+		start = now()
+		while now() - start < 3:
+			self.fill()
+			self.blit(texture, 5, 'center')
+			self.mask(4, trial_factors[4])
+			self.flip()
+		exit()
 		try:
 			resp = self.listen(3)
 		except:
 			self.timed_out = True
-		stim_parts = trial_factors[2].split("_") # this is the name of the bg  ie. "circle_of_squares"
+		# stim_parts = trial_factors[2].split("_") # this is the name of the bg  ie. "circle_of_squares"
 
 		if self.timed_out:
 			data = {"practicing": -1,
@@ -167,17 +163,19 @@ class FGSearch(klibs.Experiment):
 	def clean_up(self):
 		pass
 
-	def texture(self, type):
-		dc_side_length = deg_to_px(self.stim_size)
-		dc = aggdraw.Draw("RGBA", [dc_side_length, dc_side_length], (0, 0, 0, 0))
-		pen = aggdraw.Pen((255, 255, 255), 255, 1)
-		grid_size = dc_side_length // deg_to_px(self.bg_element_size + self.bg_element_padding)
-
+	def texture(self, texture_figure):
+		pr("@P Experiment.texture(texture_figure) reached\n\t@Ttexture_figure = {0}".format(texture_figure))
+		grid_size = deg_to_px(1.1 * self.stim_size)
+		dc = aggdraw.Draw("RGBA", (grid_size, grid_size), (0, 0, 0, 0))
+		pen = aggdraw.Pen((255, 255, 255), 1.5, 255)
+		grid_cell_size = deg_to_px(self.bg_element_size + self.bg_element_padding)
+		grid_cell_count = grid_size // grid_cell_size
+		pr("\t@TGridSize: {0}, GridCellSize:{1}, GridCellCount: {2}".format(grid_size, grid_cell_size, grid_cell_count))
 
 	 	# Visual Representation of the Texture Rendering Logic
-		# <-------G--------->
+		# <-------G-------->
 		#  _______________   ^
-		# |       O       |  |    O = element_offset, ie. 1/2 bg_elemen_padding
+		# |       O       |  |    O = element_offset, ie. 1/2 bg_element_padding
 		# |     _____     |  |    E = element (ie. circle, square, triangle, etc.)
 		# |    |     |    |  |    G = one grid length
 		# | O  |  E  |  O |  G
@@ -188,16 +186,102 @@ class FGSearch(klibs.Experiment):
 
 		element_offset = self.bg_element_padding // 2  # so as to apply padding equally on all sides of bg elements
 		element = None
-		for col in range(0, grid_size):
-			for row in range(0, grid_size):
-				top = row * grid_size + element_offset
-				left = col * grid_size + element_offset
-				bottom = top + deg_to_px(self.bg_element_size)
-				right = left + deg_to_px(self.bg_element_size)
-				if type == BG_CIRCLE: dc.ellipse([left, top, right, bottom], pen)
-				if type == BG_SQUARE: dc.rectangle([left, top, right, bottom], pen)
+		for col in range(0, grid_cell_count):
+			for row in range(0, grid_cell_count):
+				top = int(row * grid_cell_size + element_offset)
+				left = int(col * grid_cell_size + element_offset)
+				bottom = int(top + deg_to_px(self.bg_element_size))
+				right = int(left + deg_to_px(self.bg_element_size))
+				# pr("\t@Ttop: {0}, left: {1}, bottom:{2}, right:{3}".format(top, left, bottom, right))
+				if texture_figure == BG_CIRCLE: dc.ellipse([left, top, right, bottom], pen)
+				if texture_figure == BG_SQUARE: dc.rectangle([left, top, right, bottom], pen)
 		return from_aggdraw_context(dc)
 
+	def figure(self, figure_shape):
+		size = deg_to_px(self.stim_size)
+		dc_size = deg_to_px(1.1 * self.stim_size)
+		pad = 0.1 * size
+		dc = aggdraw.Draw('RGBA', (dc_size, dc_size), (0, 0, 0, 0))
+		brush = aggdraw.Brush((255, 255, 255), 255)
+
+		if figure_shape == FIG_CIRCLE:
+			dc.ellipse((pad, pad, size, size), brush)
+		if figure_shape == FIG_TRIANGLE:
+			dc.polygon((size // 2, 0, size, size, 0, size, size // 2, 0), brush)
+		if figure_shape == FIG_D:
+			dc.ellipse((pad, pad, size, size), brush)
+			dc.rectangle((pad, pad, size // 2, size), brush)
+		cookie_cutter = from_aggdraw_context(dc)
+		dough = aggdraw.Draw('RGBA', (dc_size, dc_size), (0, 0, 0, 0))
+		dough.rectangle((0, 0, dc_size, dc_size), brush)
+		dough = from_aggdraw_context(dough)
+		dough.mask(cookie_cutter, (0, 0))
+		return dough
+
+
+	def mask(self, radius, target):
+		mp = mouse_pos()
+		radius = deg_to_px(radius)
+		mask = None
+		# if target == CENTRAL:
+		mask = aggdraw.Draw('RGBA', (radius, radius), (0, 0, 0, 0))
+		for n in range(radius):
+			n = float(n)
+			r = float(radius - n)
+			opacity = int(( 0.25 * n / radius) * 100)
+			brush = aggdraw.Brush((255, 0, 0), int(opacity))
+			tl = (radius - r) // 2
+			br = (radius - r) // 2 + r
+			mask.ellipse((tl, tl, br, br), brush)
+		mask = from_aggdraw_context(mask)
+		self.blit(mask, 5, mp)
+		return
+		# 		# pr("@T\ti:{0}, r:{3}, i/r: {1},  Opacity: {2}, tl: {4}, br: {5}".format(n, float(n) / radius, opacity, radius,tl, br ))
+		# if target == PERIPHERAL:
+		# 	pass
+		brush = aggdraw.Brush(self.neutral_color, 255)
+		box_width = int(1.1 * radius)
+		pr("@T\tBoxWidth: {0}".format(box_width))
+
+		dc = canvas(Params.screen_x, Params.screen_y)
+
+		'''
+		  DRAW THE MASK BOX -- this is for testing; creates the bounding box for where the mask *should* go
+	  	'''
+	  	# half_bw = box_width // 2
+		# box_tl = (mp[0] - half_bw, mp[1] - half_bw)
+		# box_br = (mp[0] + half_bw, mp[1] + half_bw)
+		# dc.rectangle((box_tl[0], box_tl[1], box_br[0], box_br[1]), aggdraw.Brush((0, 0, 0), ))
+		#
+		# if box_tl[0] >= 0:
+		# 	if box_tl[1] >=  0:
+		# 		#  TOP STRIP
+		# 		dc.rectangle((0, 0, Params.screen_x, box_tl[1]), brush)
+		# 		#  LEFT PANEL
+		# 		dc.rectangle((0, box_tl[1],  box_tl[0], box_tl[1] + box_width), brush)
+		# 		# RIGHT PANEL
+		# 		dc.rectangle((box_tl[0] + box_width, box_tl[1], Params.screen_x, box_tl[1] + box_width), brush)
+		# 		# BOTTOM PANEL
+		# 		dc.rectangle( (0, box_tl[1] + box_width, Params.screen_x, Params.screen_y), brush)
+		# curtain = from_aggdraw_context(dc)
+
+		padded_radius = int(math.ceil(1.1 * box_width))
+	 	cookie_cutter = canvas(padded_radius, padded_radius)
+		for n in range(padded_radius):
+			n = float(n)
+			r = float(padded_radius - n)
+			opacity = int(( 0.25 * n / padded_radius) * 100)
+			brush = ad_fill((255, 255, 255), int(opacity))
+			tl = (padded_radius - r) // 2
+			br = (padded_radius - r) // 2 + r
+			cookie_cutter.ellipse((tl, tl, br, br), ad_fill([0, 0, 0]))
+			# pr("@T\ti:{0}, r:{3}, i/r: {1},  Opacity: {2}, tl: {4}, br: {5}".format(n, float(n) / radius, opacity, radius,tl, br ))
+		cookie_cutter = from_aggdraw_context(cookie_cutter)
+		dough = canvas(Params.screen_x, Params.screen_y)
+		dough.rectangle((0, 0, Params.screen_x,  Params.screen_y), ad_fill([255,0,0]))
+		dough = from_aggdraw_context(dough)
+		dough.mask(cookie_cutter, Params.screen_c)
+		self.blit(dough, 5, 'center')
 
 
 app = FGSearch("FGSearch").run()
