@@ -10,7 +10,7 @@ Params.screen_x = 1440
 Params.screen_y = 900
 # Params.default_fill_color = (125, 125, 125, 255)
 
-Params.debug_level = 11
+Params.debug_level = -1
 Params.collect_demographics = True
 Params.practicing = True
 Params.eye_tracking = True
@@ -45,17 +45,6 @@ Params.exp_factors = [("mask", [FULL, CENTRAL, PERIPHERAL]),
 					  ("background", [BG_CIRCLE, BG_SQUARE]),
 					  ("orientation", [OR_UP, OR_DOWN, OR_LEFT, OR_RIGHT]),
 					]
-#
-# class Gradient(object):
-# 	stops = []
-#
-# 	def __init__(self):
-# 		pass
-#
-# 	def add_color(self, color, location, opacity ):
-# 		self.stops.append( (color, location, opacity) )
-#
-# 	def render(self):
 
 
 class FGSearch(klibs.Experiment):
@@ -64,7 +53,7 @@ class FGSearch(klibs.Experiment):
 	bg_element_padding = 0.2  # degrees of visual angle
 
 	neutral_color = (127, 127, 127)
-	mask_opaque_region = 0.5
+	mask_opaque_portion = 0.33
 
 	# trial vars
 	timed_out = False
@@ -112,7 +101,7 @@ class FGSearch(klibs.Experiment):
 
 	def trial(self, trial_factors, trial_num):
 		"""
-		trial_factors: 1 = mask, 2 = figure, 3 = background, 4 = orientation]
+		trial_factors: 0 = mask, 1 = figure, 2 = background, 3 = orientation, 4 = fixation]
 		"""
 		pr("@PExperiment.trial() reached")
 		pr("@T\ttrial_factors: {0}".format(trial_factors[1]))
@@ -123,22 +112,11 @@ class FGSearch(klibs.Experiment):
 			pr("@T TextureMask: {0},  texture: {1}".format(texture_mask, texture))
 			texture.mask(texture_mask, (0, 0))
 		start = now()
-		print trial_factors
-		if trial_factors[1] == CENTRAL:
-			mask = self.central_mask(5, self.neutral_color)
-		if trial_factors[1] == PERIPHERAL:
-			mask = self.central_mask(5, (255, 0, 0))
-
+		mask = self.mask(5, trial_factors[4])
 		while now() - start < 2:
-			pump()
 			self.fill()
 			self.blit(texture, 5, 'center')
-			if trial_factors[1] == PERIPHERAL:
-				mask = self.peripheral_mask(mask)
-				print mask
-				self.blit(mask, 7, (0, 0))
-			if trial_factors[1] == CENTRAL:
-				self.blit(mask, 5, mouse_pos())
+			self.blit(mask, 5, mouse_pos())
 			self.flip()
 		exit()
 		try:
@@ -244,49 +222,41 @@ class FGSearch(klibs.Experiment):
 		return dough
 
 
-	def central_mask(self, diameter, color):
-		diameter = deg_to_px(diameter)
-		pr("@P mask(diameter): {0}".format(diameter))
+	def mask(self, radius, target):
+		radius = deg_to_px(radius)
+		diameter = radius * 2
+		mask = None
+		# if target == CENTRAL:
+		mask = aggdraw.Draw('RGBA', (radius, radius), (0, 0, 0, 0))
+		for n in range(radius):
+			r =  float(radius - n)
+			opacity = int((float(n) / radius) * 255.0)
 
-		mask = aggdraw.Draw('RGBA', (diameter, diameter), (0, 0, 0, 0))
-		opaque_region = int(diameter * self.mask_opaque_region)
-		graded_region = diameter - opaque_region
-		graded_range = range(opaque_region, diameter)
-		cumulative_opacity = None
-		cumulative_diffs = []
-		for n in range(1, diameter):
-			d = float(diameter - n)
-			if d in graded_range:
-				opacity_factor = float(diameter - d) / graded_region * 1.0
-				intended_opacity = int(floor(255 * opacity_factor))
-				if cumulative_opacity is None: cumulative_opacity = intended_opacity
-				if intended_opacity > cumulative_opacity:
-					opacity_diff = intended_opacity - cumulative_opacity
-					cumulative_diffs.append(opacity_diff/255.0)
-					cumulative_opacity += opacity_diff
-					opacity = cumulative_opacity * sum(cumulative_diffs)
-				else:
-					opacity = cumulative_opacity
-				tl = n//2
-				br = diameter - tl
-				pr("\t@T opacity: {0},cumulative:{3}  opacity_factor: {1},  d: {2}".format(opacity,  opacity_factor, d, cumulative_opacity), 10)
-			else:
-				opacity = 255
-			brush = aggdraw.Brush(color, int(opacity))
+			# r = radius - n
+			# opaque_radius = radius // 2
+			# graded_radius = radius - opaque_radius
+			# #  decide the completely opaque fraction
+			# if r < opaque_radius:  # if it's less than the graded area, it's filled
+			# 	opacity = 255
+			# else:
+			# 	opacity_fraction =  1 - float((r - opaque_radius)) / float(graded_radius)
+			# 	real_opacity = opacity_fraction * 255.0
+			# 	opacity = int(real_opacity)
+			# pr("\t@P opacity: {0}, real_opacity: {3}, opacity_fraction: {1},  r: {2}".format(opacity,  opacity_fraction, r, real_opacity))
+			brush = aggdraw.Brush((0, 0, 0), opacity)
+			tl = (radius // 2)
+			br = radius - n
+			pr("\t@T opacity: {0}, tr:{1}, br: {2}".format(opacity, tl, br))
 			mask.ellipse((tl, tl, br, br), brush)
-
 		return from_aggdraw_context(mask)
-
-	def peripheral_mask(self, mask):
-		dc = aggdraw.Draw('RGBA', (Params.screen_x, Params.screen_y), (0, 0, 0, 0))
+		# 		# pr("@T\ti:{0}, r:{3}, i/r: {1},  Opacity: {2}, tl: {4}, br: {5}".format(n, float(n) / radius, opacity, radius,tl, br ))
+		# if target == PERIPHERAL:
+		# 	pass
 		brush = aggdraw.Brush(self.neutral_color, 255)
-		dc.rectangle( (0, 0, Params.screen_x, Params.screen_y), brush )
-		p_mask = from_aggdraw_context(dc)
-		p_mask.mask(mask, mouse_pos())
-		return p_mask
-		box_width = int(1.1 * diameter)
+		box_width = int(1.1 * radius)
 		pr("@T\tBoxWidth: {0}".format(box_width))
 
+		dc = canvas(Params.screen_x, Params.screen_y)
 
 		'''
 		  DRAW THE MASK BOX -- this is for testing; creates the bounding box for where the mask *should* go
@@ -328,3 +298,112 @@ class FGSearch(klibs.Experiment):
 
 
 app = FGSearch("FGSearch").run()
+
+
+# import os
+# os.remove("/Users/jono/Documents/Python/Jon/parafovealactivity/lib/klibs.py")
+# os.remove("/Users/jono/Documents/Python/Jon/parafovealactivity/lib/klibs.pyc")
+# os.symlink("/Users/jono/Documents/Python/Jon/klib/klibs.py",
+# "/Users/jono/Documents/Python/Jon/parafovealactivity/lib/klibs.py")
+
+
+#
+# class PFA(kl.App):
+#
+# 	def block(self, blockNum):
+# 		pass
+#
+# 	def setup(self):
+# 		if self.DEMOGRAPH:
+# 			if self.participantId <= 6:
+# 				self.METACOND = self.METAFACTORS[self.participantId]
+# 			else:
+# 				multiples = self.participantId//6
+# 				mc = self.participantId - (6*multiples)
+# 				self.METACOND = self.METAFACTORS[mc]
+# 		else:
+# 			self.METACOND = self.METAFACTORS[0]
+# 		self.watermark = pygame.image.load("assets/img/keys_watermark.png")
+# 		self.driftTarget = pygame.image.load("assets/img/drift.png")
+# 		self.asurf = pygame.Surface(self.screenxy, flags=pygame.SRCALPHA)
+# 		self.keyMapper('shapes', self.KEYNAMES, self.KEYCODES, self.KEYVALS)
+# 		if not self.noTracker:
+# 			self.EL.trackerInit()
+# 			self.EL.setup()
+# 			self.PRACTICING = False
+#
+# 	def trialPrep(self,t, tnum):
+# 		self.sf(self.LM_GREY)
+# 		self.sf(self.WHITE, self.asurf)
+# 		self.badTrial = False
+# 		if self.noTracker:
+# 			m = "Press any key to advance..."
+# 			self.message(m,location="center", fontSize=48, fullscreen=True, flip=True)
+# 			self.listen("*", "*")
+# 			time.sleep(0.2)
+#
+# 	def startGaze(self, loc):
+# 		if loc == "center":
+# 			pos = self.screenc
+# 		elif loc == "top-middle":
+# 			pos = (self.screenx//4, self.screeny//2)
+# 		elif loc == "bottom-middle":
+# 			pos = ((self.screenx*3)//4, self.screeny//2)
+# 		return pos
+#
+# 	def trial(self, t, trialNum=None):
+#
+#
+#
+# 	def trialCleanUp(self):
+# 		pass
+#
+# 	def checkBounds(self, gazeStart):
+# 		self.bliterate(self.watermark, 5, self.screenc)
+# 		self.bliterate(self.driftTarget, 5, gazeStart)
+# 		self.flip()
+# 		dtx = (self.driftTarget.get_width() // 2) + 50
+# 		dty = (self.driftTarget.get_height() // 2) + 50
+# 		left = gazeStart[0] - dtx
+# 		right = gazeStart[0] + dtx
+# 		top = gazeStart[1] - dty
+# 		bottom = gazeStart[1] + dtx
+#
+# 		inBounds = False
+# 		while not inBounds:
+# 			if self.noTracker:
+# 				pygame.event.pump() # if using mouse
+# 			gaze = self.EL.gaze(None)
+# 			if gaze:
+# 				inBounds = self.boundedBy(gaze, left, right, top, bottom)
+#
+#
+#
+# 	def codeGen(self):
+# 		pass
+#
+# 	def cleanUp(self):
+# 		pass
+#
+# 	def parseStim(self, stimName):
+# 		parts = stimName.split("_")
+# 		return [parts[0], parts[1]]
+
+# global app
+# el = MyLink()
+# app = PFA(el, paramFile="Parameters", paramsDir="lib")
+# app.expFactors = app.FACTORS
+# # app.db.rebuild()
+# app.noTracker = False
+# app.expSchema(1, 144, 0, 0)
+# if app.DEMOGRAPH:
+# 	app.getDemographics()
+# if app.INSTRUCT:
+# 	app.instructions(app.INSTRUCTIONS)
+# if app.EXECUTE:
+# 	app.run()
+# while True: # exit message hangs in overwatch until command+q is pressed
+# 	app.sf()
+# 	app.message(app.COMPLETION_MESSAGE, location="center", wrap = True, delimiter="\r")
+# 	app.listen('*','*')
+
