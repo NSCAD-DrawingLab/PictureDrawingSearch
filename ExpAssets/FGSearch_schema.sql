@@ -13,18 +13,12 @@ CREATE TABLE trials (
 	participant_id integer key not null,
 	block_num integer not null,
 	trial_num integer not null,
-	practicing integer not null,
-  	metacondition text not null,
+	practicing text not null,
 	mask text not null,
-  	mask_diam integer not null,
+  mask_diam text not null,
 	material text not null,
 	form text not null,
 	rt real not null, -- reaction time
-  	response integer not null,
-  	initial_fixation text not null
+  response text not null,
+  initial_fixation text not null
 );
-
-CREATE TABLE metaconditions  (
-  id integer not null,
-  mcstring text not null
-)
