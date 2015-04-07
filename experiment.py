@@ -8,11 +8,11 @@ from klibs.KLUtilities import *
 import random
 import sdl2
 
-Params.screen_x = 1400
-Params.screen_y = 900
+Params.screen_x = 1024
+Params.screen_y = 768
 Params.default_fill_color = (100, 100, 100, 255)
 
-Params.debug_level = 0
+Params.debug_level = 1
 Params.collect_demographics = True
 Params.practicing = True
 Params.eye_tracking = True
@@ -75,8 +75,11 @@ class FGSearch(klibs.Experiment):
 	mask_abs_alpha_region = 0.5
 	pseudo_mask = None
 
-	# trial vars
+	#  trial vars
 	timed_out = False
+
+	#  debug vars
+	gaze_debug_dot = None
 
 	def __init__(self, *args, **kwargs):
 		klibs.Experiment.__init__(self, *args, **kwargs)
@@ -100,6 +103,9 @@ class FGSearch(klibs.Experiment):
 		dc_middle_tl = (Params.screen_x / 2 - 0.5 * dc_box_size, 0.5 * Params.screen_y - 0.5 * dc_box_size)
 		dc_middle_br = (Params.screen_x / 2 + 0.5 * dc_box_size, 0.5 * Params.screen_y + 0.5 * dc_box_size)
 		self.eyelink.add_gaze_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br])
+		gaze_debug_dot = Image.new("RGBA", (5, 5), (0, 0, 0, 0))
+		ImageDraw.Draw(gaze_debug_dot , "RGBA").ellipse((0, 0, 5, 5), (255, 0, 0, 255), (0, 0, 0, 255))
+		self.gaze_debug_dot = from_aggdraw_context(gaze_debug_dot)
 		pr("@BExperiment.setup() exiting", 1)
 
 	def block(self, block_num):
@@ -121,12 +127,6 @@ class FGSearch(klibs.Experiment):
 		pr("@PExperiment.trial_prep() reached", 1)
 		self.database.init_entry('trials')
 		self.clear()
-		self.message("Press any key to advance...", color=(255, 255, 255, 255), location="center", font_size=48,
-					 flip=False)
-		self.listen()
-		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
-
-		self.drift_correct(self.fixation)
 		pr("@BExperiment.trial_prep() exiting", 1)
 
 	def trial(self, trial_factors, trial_num):
@@ -136,12 +136,24 @@ class FGSearch(klibs.Experiment):
 		pr("@PExperiment.trial() reached", 1)
 		pr("@T\ttrial_factors: {0}".format(trial_factors[1]), 0)
 
-		self.eyelink.start(trial_num)
 		texture = self.texture(trial_factors[3])
 		if trial_factors[2] != FIG_SQUARE:  # texture already is square, nothing to mask
 			texture_mask = self.figure(trial_factors[2])
 			pr("@T TextureMask: {0},  texture: {1}".format(texture_mask, texture), 2)
 			texture.mask(texture_mask, (0, 0))
+		"""
+		  The next 4 lines would typically belong in the trial_prep() function, but due to lag in rendering the mask &
+		  texture surfaces, are executed here instead to ensure that the trial begins without delay after drift
+		  correction.
+		"""
+
+		self.message("Press any key to advance...", color=(255, 255, 255, 255), location="center", font_size=48,
+					 flip=False)
+		self.listen()
+		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
+		self.drift_correct(self.fixation)
+
+		self.eyelink.start(trial_num)
 		start = now()
 		mask = self.mask(self.mask_diameter, trial_factors[1] == PERIPHERAL)
 		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, texture=texture,
@@ -248,16 +260,16 @@ class FGSearch(klibs.Experiment):
 			bg_attributes = [int(deg_to_px(self.stim_size * 2)), self.neutral_color]
 		else:
 			blur_size = int(diameter * 0.05)
-			bg_attributes = [int(diameter * 1.5), self.neutral_color]
+			bg_attributes = [int(diameter), self.neutral_color]
 
 		bg = Image.new("RGBA", (bg_attributes[0], bg_attributes[0]), bg_attributes[1])
 
-		tl = int(0.333 * diameter) if peripheral else int(0.25 * diameter)
+		tl = int(0.333 * diameter)
 		br = diameter - tl
 
 		if peripheral:
 			alpha_mask = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
-			alpha_mask_canvas = ImageDraw.Draw(alpha_mask, "RGBA").ellipse((tl, tl, br, br), (255, 255, 255, 255), (0, 0, 0, 255))
+			alpha_mask_canvas = ImageDraw.Draw(alpha_mask, "RGBA").ellipse((tl, tl, br, br), (255, 255, 255, 255), (255, 0, 0, 255))
 			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(blur_size))
 			alpha_mask = from_aggdraw_context(alpha_mask)
 			mask = from_aggdraw_context(bg)
@@ -267,7 +279,7 @@ class FGSearch(klibs.Experiment):
 			mask.mask(alpha_mask, (tl,br), True)
 		else:
 			alpha_mask = Image.new("RGBA", (bg_attributes[0], bg_attributes[0]), (255, 255, 255, 255))
-			alpha_mask_canvas = ImageDraw.Draw(alpha_mask, "RGBA").ellipse((tl, tl, br, br), (0, 0, 0, 255), (0, 0, 0, 255))
+			alpha_mask_canvas = ImageDraw.Draw(alpha_mask, "RGBA").ellipse((tl, tl, br, br), (0, 0, 0, 255), (255, 0, 0, 255))
 			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(blur_size))
 			alpha_mask = from_aggdraw_context(alpha_mask)
 			# bg_canvas = ImageDraw.Draw(bg, "RGBA").ellipse((tl, tl, br, br), self.neutral_color, (0, 0, 0, 0))
@@ -290,6 +302,8 @@ class FGSearch(klibs.Experiment):
 				mask = self.pseudo_mask
 				position = 'center'
 			self.blit(mask, 5, position)
+			if Params.debug_level > 0:
+				self.blit(self.gaze_debug_dot, 5, mouse_pos())
 		self.flip()
 
 app = FGSearch("FGSearch").run()
