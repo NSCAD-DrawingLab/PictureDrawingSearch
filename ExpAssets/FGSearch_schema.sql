@@ -16,8 +16,9 @@ CREATE TABLE trials (
 	practicing text not null,
 	mask text not null,
   mask_diam text not null,
-	material text not null,
-	form text not null,
+	background text not null,
+	figure text not null,
+	figure_orientation text not null,
 	rt real not null, -- reaction time
   response text not null,
   initial_fixation text not null
