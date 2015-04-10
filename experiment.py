@@ -9,12 +9,12 @@ import random
 import sdl2
 
 Params.screen_x = 1024
-Params.screen_y = 768
+Params.screen_y = 640
 Params.default_fill_color = (100, 100, 100, 255)
 
-Params.debug_level = 1
+Params.debug_level = 0
 Params.collect_demographics = True
-Params.practicing = True
+Params.practicing = False
 Params.eye_tracking = True
 Params.eye_tracker_available = False
 
@@ -41,15 +41,16 @@ CENTRAL = "MASK_C"
 PERIPHERAL = "MASK_P"
 FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
 FIX_CENTRAL = Params.screen_c
-FiX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
+FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 SEARCH_RESPONSE_KEYS = "FGSearch_response"
 WHITE = (255, 255, 255, 255)
 NEUTRAL_COLOR = Params.default_fill_color
 """
 EXPERIMENT FACTORS & 'METAFACTOS' (ie. between-block variations as against between-trial)
 """
-Params.exp_meta_factors = {"stim_size": [10, 8, 4], # degrees of visual angle
-						   "fixation": [FIX_TOP, FIX_CENTRAL, FiX_BOTTOM]}
+Params.exp_meta_factors = {"stim_size": [4, 4, 4], # degrees of visual angle
+						   "fixation": [FIX_TOP, FIX_CENTRAL, FIX_BOTTOM]}
+						   
 Params.exp_factors = [("mask", [FULL, CENTRAL, PERIPHERAL]),
 					  ("figure", [FIG_TRIANGLE, FIG_D, FIG_D, FIG_TRIANGLE ]),
 					  ("background", [BG_CIRCLE, BG_SQUARE]),
@@ -57,7 +58,6 @@ Params.exp_factors = [("mask", [FULL, CENTRAL, PERIPHERAL]),
 					]
 
 """
-
 This code defines a  class that 'extends' the basic KLExperiment class.
 The experiment itself is actually *run* at the end of this document, after it's been defined.
 
@@ -65,7 +65,7 @@ The experiment itself is actually *run* at the end of this document, after it's 
 
 class FGSearch(klibs.Experiment):
 	stim_size = None
-	mask_diameter = 5  # degress of visual angle
+	mask_diameter = 10  # degress of visual angle
 	search_time = 3  # seconds
 	fixation = None  # chosen randomly each trial
 	bg_element_size = 0.2  # degrees of visual angle
@@ -106,6 +106,7 @@ class FGSearch(klibs.Experiment):
 		gaze_debug_dot = Image.new("RGBA", (5, 5), (0, 0, 0, 0))
 		ImageDraw.Draw(gaze_debug_dot , "RGBA").ellipse((0, 0, 5, 5), (255, 0, 0, 255), (0, 0, 0, 255))
 		self.gaze_debug_dot = from_aggdraw_context(gaze_debug_dot)
+		self.eyelink.setup()
 		pr("@BExperiment.setup() exiting", 1)
 
 	def block(self, block_num):
