@@ -7,9 +7,10 @@ from klibs.KLNumpySurface import *
 from klibs.KLUtilities import *
 import random
 import sdl2
+import copy
 
-Params.screen_x = 2560
-Params.screen_y = 1440
+Params.screen_x = 1024
+Params.screen_y = 768
 Params.default_fill_color = (100, 100, 100, 255)
 
 Params.debug_level = 1
@@ -26,11 +27,11 @@ Params.trials_per_practice_block = None
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
 """
-CIRCLE = 2
-SQUARE = 4
+CIRCLE = "CIRCLE"
+SQUARE = "SQUARE"
 
-FIGURE = 0
-BACKGROUND = 1
+FIGURE = "FIGURE"
+BACKGROUND = "BACKGROUND"
 OR_UP = "ROTATED_0_DEG"
 OR_RIGHT = "ROTATED_90_DEG"
 OR_DOWN = "ROTATED_180_DEG"
@@ -42,19 +43,24 @@ FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
 FIX_CENTRAL = Params.screen_c
 FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 SEARCH_RESPONSE_KEYS = "FGSearch_response"
+BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
+RED = (255, 0, 0, 80)
+GREEN = (0, 255, 0, 80)
+BLUE = (0, 0, 255, 80)
+DARK_GREY= (45, 45, 45, 255)
 NEUTRAL_COLOR = Params.default_fill_color
-
+TRANSPARENT = (0, 0, 0, 0)
+RGBA = "RGBA"
 """
 EXPERIMENT FACTORS & 'METAFACTOS' (ie. between-block variations as against between-trial)
 """
-Params.exp_meta_factors = {"stim_size": [4, 4, 4], # degrees of visual angle
-						   "fixation": [FIX_TOP, FIX_CENTRAL, FIX_BOTTOM]}
+Params.exp_meta_factors = {"fixation": [FIX_TOP, FIX_CENTRAL, FIX_BOTTOM]}
 						   
-Params.exp_factors = [("mask", [FULL, CENTRAL, PERIPHERAL]),
+Params.exp_factors = [("mask_type", [CENTRAL, PERIPHERAL]),
+					  ("mask_size", [4, 8, 10]),
 					  ("target_level", [FIGURE, BACKGROUND]),
-					  ("target_shape", [CIRCLE, SQUARE]),
-					  ("orientation", [OR_UP, OR_LEFT, OR_RIGHT, OR_DOWN]),
+					  ("target_shape", [SQUARE, CIRCLE]),
 					]
 
 """
@@ -63,19 +69,26 @@ The experiment itself is actually *run* at the end of this document, after it's 
 """
 
 class FGSearch(klibs.Experiment):
-	stim_size = None
-	mask_diameter = 4  # degress of visual angle
-	search_time = 3  # seconds
+	stim_size = 4  # degrees of visual angle
+	stim_pad = 0.4 # degrees of visual angle
+	mask_blur_width = 4  # pixels
+	maximum_mask_size = 0  # automatically set at run time, do not change
+	search_time = 30  # seconds
 	fixation = None  # chosen randomly each trial
-	bg_element_size = 0.2  # degrees of visual angle
-	bg_element_padding = 0.2  # degrees of visual angle
+	bg_element_size = 0.4  # degrees of visual angle
+	bg_element_pad = 0.3  # degrees of visual angle
+	orientations = [0, 90, 180, 270]
 
 	neutral_color = Params.default_fill_color
-	mask_abs_alpha_region = 0.5
 	pseudo_mask = None
 
 	#  trial vars
 	timed_out = False
+
+	textures = {}
+	figures = {}
+	stimuli = {}
+	masks = {}
 
 	#  debug vars
 	gaze_debug_dot = None
@@ -84,8 +97,84 @@ class FGSearch(klibs.Experiment):
 		klibs.Experiment.__init__(self, *args, **kwargs)
 
 	def setup(self):
-		pr("@PExperiment.setup() reached", 1)
+		pr("@PExperiment.setup() reached", 2)
+		self.stim_pad = deg_to_px(self.stim_pad)
+		self.__generate_masks()
+		self.__generate_stimuli()
+
+
+		self.__generate_fixations()
 		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["CIRCLE", "SQUARE"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
+
+		# debugging dot for gaze coordinates
+		gaze_debug_dot = Image.new(RGBA, (5, 5), TRANSPARENT)
+		ImageDraw.Draw(gaze_debug_dot , RGBA).ellipse((0, 0, 5, 5), RED, BLACK)
+		self.gaze_debug_dot = from_aggdraw_context(gaze_debug_dot)
+
+		padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
+		pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
+		self.pseudo_mask = from_aggdraw_context(pseudo_mask)
+
+		#self.collect_demographics()
+		self.eyelink.setup()
+		pr("@BExperiment.setup() exiting", 2)
+
+	def __generate_masks(self):
+		max_mask_px = 0
+		smaller_than_screen = True
+		while smaller_than_screen:
+			self.maximum_mask_size += 1
+			new_max_mask_px = deg_to_px(self.maximum_mask_size) + deg_to_px(self.stim_size) // 2 + self.stim_pad // 2
+			if new_max_mask_px > Params.screen_y:
+				smaller_than_screen = False
+				self.maximum_mask_size -= 1
+			else:
+				max_mask_px = new_max_mask_px
+		for size in Params.exp_factors[1][1]:
+			if size > self.maximum_mask_size:
+				e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
+				raise ValueError(e_str)
+		pr("\t@R self.maximum_mask_size: {0} or: {1}".format(self.maximum_mask_size,
+															 deg_to_px(self.maximum_mask_size) + deg_to_px(
+																 self.stim_size) // 2 + self.stim_pad // 2))
+		self.clear()
+		self.message("Rendering masks...", font_size=48, location=Params.screen_c, registration=5, flip=True)
+		self.masks = {}
+		for size in Params.exp_factors[1][1]:
+			pump()
+			self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL)
+			self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL)
+
+	def __generate_stimuli(self):
+		self.message("Generating stimuli...", font_size=48, location=Params.screen_c, registration=5, flip=True)
+		# render all the stimuli in advance to save on load times later
+		self.textures = {
+		CIRCLE: self.texture(CIRCLE, 0),
+		SQUARE: self.texture(SQUARE, 0),
+		"D_0": self.texture(False, 0),
+		"D_90": self.texture(False, 90),
+		"D_180": self.texture(False, 180),
+		"D_270": self.texture(False, 270)}
+
+		self.figures = {
+		CIRCLE: self.figure(CIRCLE, 0),
+		SQUARE: self.figure(SQUARE, 0),
+		"D_0": self.figure(False, 0),
+		"D_90": self.figure(False, 90),
+		"D_180": self.figure(False, 180),
+		"D_270": self.figure(False, 270)}
+
+		stimuli_labels = [["D_0", "CIRCLE"], ["D_90", "CIRCLE"], ["D_180", "CIRCLE"], ["D_270", "CIRCLE"],
+						  ["D_0", "SQUARE"], ["D_90", "SQUARE"], ["D_180", "SQUARE"], ["D_270", "SQUARE"],
+						  ["CIRCLE", "D_0"], ["CIRCLE", "D_90"], ["CIRCLE", "D_180"], ["CIRCLE", "D_270"],
+						  ["SQUARE", "D_0"], ["SQUARE", "D_90"], ["SQUARE", "D_180"], ["SQUARE", "D_270"]]
+
+		for label in stimuli_labels:
+			stim = copy.deepcopy(self.textures[label[1]])
+			figure = copy.deepcopy(self.figures[label[0]])
+			self.stimuli["{0}_{1}".format(label[0], label[1])] = stim
+
+	def __generate_fixations(self):
 		Params.exp_meta_factors['fixation'] = [Params.screen_c,
 											   (Params.screen_c[0], Params.screen_y / 4),
 											   (Params.screen_c[0], 3 * Params.screen_y / 4)]
@@ -102,59 +191,47 @@ class FGSearch(klibs.Experiment):
 		dc_middle_tl = (Params.screen_x / 2 - 0.5 * dc_box_size, 0.5 * Params.screen_y - 0.5 * dc_box_size)
 		dc_middle_br = (Params.screen_x / 2 + 0.5 * dc_box_size, 0.5 * Params.screen_y + 0.5 * dc_box_size)
 		self.eyelink.add_gaze_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br])
-		gaze_debug_dot = Image.new("RGBA", (5, 5), (0, 0, 0, 0))
-		ImageDraw.Draw(gaze_debug_dot , "RGBA").ellipse((0, 0, 5, 5), (255, 0, 0, 255), (0, 0, 0, 255))
-		self.gaze_debug_dot = from_aggdraw_context(gaze_debug_dot)
-		#self.collect_demographics()
-		self.eyelink.setup()
-		pr("@BExperiment.setup() exiting", 1)
 
 	def block(self, block_num):
-		pr("@PExperiment.block() reached", 1)
-		self.stim_size = Params.exp_meta_factors['stim_size'][Params.block_number % 3]
-		stim_size_px = deg_to_px(self.stim_size * 0.9)
-		padded_stim_size_px = int(1.25 * deg_to_px(self.stim_size))
-		tl_x =  Params.screen_x // 2 - stim_size_px // 2
-		tl_y =  Params.screen_y // 2 - stim_size_px // 2
-		br_x =  Params.screen_x // 2 + stim_size_px // 2
-		br_y =  Params.screen_y // 2 + stim_size_px // 2
-		self.eyelink.add_gaze_boundary('stim_space',[(tl_x, tl_y), (br_x, br_y)] )
-		pseudo_mask = Image.new("RGBA", (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
-		self.pseudo_mask = from_aggdraw_context(pseudo_mask)
-		pr("@BExperiment.block() exiting", 1)
+		pr("@PExperiment.block() reached", 2)
+		pr("@BExperiment.block() exiting", 2)
 
 	def trial_prep(self, *args, **kwargs):
-		pr("@PExperiment.trial_prep() reached", 1)
+		pr("@PExperiment.trial_prep() reached", 2)
 		self.database.init_entry('trials')
 		self.clear()
-		pr("@BExperiment.trial_prep() exiting", 1)
+		pr("@BExperiment.trial_prep() exiting", 2)
 
 	def trial(self, trial_factors, trial_num):
 		"""
-		trial_factors: 1 = mask, 2 = target_level, 3 = target_shape, 4 = orientation]
+		trial_factors: 1 = mask_type, 2 = mask_size, 3 = target_level, 4 = target_shape]
 		"""
-		pr("@PExperiment.trial() reached", 1)
-		pr("@T\ttrial_factors: {0}".format(trial_factors[1]), 0)
-		figure = trial_factors[3] if trial_factors[2] == FIGURE else False
-		texture = self.texture(trial_factors[3] if figure is False else False, trial_factors[4])
-		if figure != SQUARE:  # texture already is square, nothing to mask
-			texture_mask = self.figure(figure, trial_factors[4])
-			pr("@T TextureMask: {0},  texture: {1}".format(texture_mask, texture), 2)
-			texture.mask(texture_mask, (0, 0))
-		"""
-		  The next 4 lines would typically belong in the trial_prep() function, but due to lag in rendering the mask &
-		  texture surfaces, are executed here instead to ensure that the trial begins without delay after drift
-		  correction.
-		"""
+		pr("@PExperiment.trial() reached, @Ttrial_factors: {0}".format(trial_factors), 0)
+
+		# choose randomly varying parts of trial
+		orientation = random.choice(self.orientations)
+		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
+
+		# infer which mask & stim to use and retrieve them
+		figure = trial_factors[4] if trial_factors[3] == FIGURE else False
+		stim_label = None
+		if figure:
+			stim_label = "{0}_D_{1}".format(trial_factors[4], orientation)
+		else:
+			stim_label = "D_{0}_{1}".format(orientation, trial_factors[4])
+		stim = self.stimuli[stim_label]
+		mask_label = "{0}_{1}".format(trial_factors[1], trial_factors[2])
+		mask = self.masks[mask_label]
+
+		# start the trial
 		self.message("Press any key to advance...", color=WHITE, location="center", font_size=48, flip=False)
 		self.listen()
-		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
 		self.drift_correct(self.fixation)
-
 		self.eyelink.start(trial_num)
-		mask = self.mask(self.mask_diameter, trial_factors[1] == PERIPHERAL)
-		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, texture=texture,
-						   mask=mask, mask_type=trial_factors[1])
+		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, stim=stim,
+						   mask=mask, mask_type=trial_factors[1], gaze_boundary=mask_label)
+
+		# handle timeouts
 		if resp[0] == TIMEOUT:
 			self.clear()
 			self.alert("Too slow!", False, 1)
@@ -169,19 +246,17 @@ class FGSearch(klibs.Experiment):
 		else:
 			initial_fixation = "BOTTOM"
 
-
 		return {"practicing": trial_factors[0],
 				"response": resp[0],
 				"rt": float(resp[1]),
-				"mask": trial_factors[1],
-				"mask_diam": self.stim_size,
-				"figure": trial_factors[2],
-				"figure_orientation": trial_factors[4],
-				"background": trial_factors[3],
+				"mask_type": trial_factors[1],
+				"mask_size": trial_factors[2],
+				"figure": trial_factors[3],
+				"d_orientation": orientation,
+				"background": trial_factors[4],
 				"trial_num": trial_num,
 				"block_num": Params.block_number,
 				"initial_fixation": initial_fixation}
-
 
 	def trial_clean_up(self, *args, **kwargs):
 		self.fixation = None
@@ -190,20 +265,22 @@ class FGSearch(klibs.Experiment):
 		pass
 
 	def texture(self, texture_figure, orientation=None):
-		pr("@PExperiment.texture(texture_figure) reached", 1)
-		pr("\t@Ttexture_figure = {0}, orientation= {1}".format(texture_figure, orientation), 0)
-		grid_size = deg_to_px(1.1 * self.stim_size)
-		dc = aggdraw.Draw("RGBA", (grid_size, grid_size), self.neutral_color)
-		pen = aggdraw.Pen((255, 255, 255), 1.5, 255)
-		grid_cell_size = deg_to_px(self.bg_element_size + self.bg_element_padding)
+		pr("@PExperiment.texture(texture_figure) reached", 2)
+		pr("\t@Ttexture_figure = {0}, orientation = {1}".format(texture_figure, orientation), 2)
+		grid_size = (deg_to_px(self.stim_size) + self.stim_pad) * 2
+		stim_offset = self.stim_pad // 2
+		dc = Image.new(RGBA, (grid_size, grid_size), TRANSPARENT)
+		stroke_width = 2  #px
+		grid_cell_size = deg_to_px(self.bg_element_size + self.bg_element_pad)
 		grid_cell_count = grid_size // grid_cell_size
-		pr("\t@TGridSize: {0}, GridCellSize:{1}, GridCellCount: {2}".format(grid_size, grid_cell_size, grid_cell_count), 2)
+		stim_offset += (grid_size % grid_cell_size) // 2  # split grid_size %% cells over pad
+		pr("\t@TGridSize: {0}, GridCellSize:{1}, GridCellCount: {2}".format(grid_size // 2, grid_cell_size // 2, grid_cell_count), 1)
 
 	 	# Visual Representation of the Texture Rendering Logic
 		# <-------G-------->
 		#  _______________   ^
 		# |       O       |  |    O = element_offset, ie. 1/2 bg_element_padding
-		# |     _____     |  |    E = element (ie. circle, square, triangle, etc.)
+		# |     _____     |  |    E = element (ie. circle, square, D, etc.)
 		# |    |     |    |  |    G = one grid length
 		# | O  |  E  |  O |  G
 		# |    |_____|    |  |
@@ -211,120 +288,137 @@ class FGSearch(klibs.Experiment):
 		# |_______O_______|  |
 		#                    v
 
-		element_offset = self.bg_element_padding // 2  # so as to apply padding equally on all sides of bg elements
+		element_offset = self.bg_element_pad // 2  # so as to apply padding equally on all sides of bg elements
 		element = None
 		for col in range(0, grid_cell_count):
 			for row in range(0, grid_cell_count):
-				top = int(row * grid_cell_size + element_offset)
-				left = int(col * grid_cell_size + element_offset)
-				bottom = int(top + deg_to_px(self.bg_element_size))
-				right = int(left + deg_to_px(self.bg_element_size))
-				pr("\t@Ttop: {0}, left: {1}, bottom:{2}, right:{3}".format(top, left, bottom, right), 2)
-				if texture_figure == CIRCLE: dc.ellipse([left, top, right, bottom], pen)
-				elif texture_figure == SQUARE: dc.rectangle([left, top, right, bottom], pen)
+				pump()
+				top_out = int(row * grid_cell_size + element_offset + stim_offset)
+				top_in = top_out + stroke_width  # ie. top_inner
+				left_out = int(col * grid_cell_size + element_offset + stim_offset)
+				left_in = left_out+ stroke_width
+				bottom_out = int(top_out + deg_to_px(self.bg_element_size))
+				bottom_in = bottom_out - stroke_width
+				right_out = int(left_out + deg_to_px(self.bg_element_size))
+				right_in = right_out - stroke_width
+				pr("\t@Ttop_out: {0}, left_out: {1}, bottom_out:{2}, right_out:{3}".format(top_out, left_out, bottom_out, right_out), 2)
+				if texture_figure == CIRCLE:
+					ImageDraw.Draw(dc, RGBA).ellipse((left_out, top_out, right_out, bottom_out), WHITE)
+					ImageDraw.Draw(dc, RGBA).ellipse((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
+				elif texture_figure == SQUARE:
+					ImageDraw.Draw(dc, RGBA).rectangle((left_out, top_out, right_out, bottom_out), WHITE)
+					ImageDraw.Draw(dc, RGBA).rectangle((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
 				elif texture_figure is False:
-					dc.ellipse([left, top, right, bottom], pen)
-					arc_left = right - int(0.5 * deg_to_px(self.bg_element_size))
-					arc_mid = top + int(0.5 * deg_to_px(self.bg_element_size))
-					rect_right = arc_left - 2
-					# if orientation in [OR_RIGHT, OR_LEFT, OR_DOWN]:
-					# 	pr("getting here")
-					# 	if orientation == OR_RIGHT:
-					# 		dc = dc.rotate(90)
-					# 	elif orientation == OR_DOWN:
-					# 		dc = dc.rotate(180)
-					# 	else:
-					# 		dc = dc.rotate(270)
-					dc.rectangle([left, top, rect_right - 1, bottom], aggdraw.Brush(self.neutral_color))
-					dc.line([rect_right, top, left, top], pen)
-					dc.line([left, top, left, bottom], pen)
-					dc.line([left, bottom, rect_right, bottom], pen)
-
-
-		pr("@BExperiment.texture() exiting", 1)
+					pr("\t@Rtexture_figure was FALSE", 2)
+					half_el_width = int(0.5 * deg_to_px(self.bg_element_size))
+					rect_right = right_out - half_el_width
+					rect_right_in = right_out - half_el_width - stroke_width
+					ImageDraw.Draw(dc, RGBA, ).ellipse((left_out, top_out, right_out, bottom_out), WHITE)
+					ImageDraw.Draw(dc, RGBA, ).ellipse((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
+					ImageDraw.Draw(dc, RGBA, ).rectangle((left_out, top_out, rect_right, bottom_out), WHITE)
+					ImageDraw.Draw(dc, RGBA, ).rectangle((left_in, top_in, rect_right, bottom_in), NEUTRAL_COLOR)
+		dc = dc.resize((grid_size // 2, grid_size // 2), Image.ANTIALIAS)
+		dc = dc.rotate(orientation)
+		pr("@BExperiment.texture() exiting", 2)
 		return from_aggdraw_context(dc)
 
 	def figure(self, figure_shape, orientation):
-		size = deg_to_px(self.stim_size)
-		dc_size = deg_to_px(1.1 * self.stim_size)
-		pad = 0.1 * size
-		dc = Image.new("RGBA",  (dc_size, dc_size), (0, 0, 0, 0))
+		pr("@PExperiment.figure() reached, @Tfigure_shape: {0}, orientation: {1}".format(figure_shape, orientation), 0)
+		stim_size_px = deg_to_px(self.stim_size)
+		half_pad = self.stim_pad
+		pad = 2 * self.stim_pad
+		tl_fig = pad
+		br_fig = 2 * stim_size_px
+		rect_right = br_fig - stim_size_px
+		dc_size = (stim_size_px + half_pad) * 2
+		dc = Image.new(RGBA,  (dc_size, dc_size), TRANSPARENT)
 
 		if figure_shape == CIRCLE:
-			ImageDraw.Draw(dc, 'RGBA', ).ellipse((pad, pad, size, size), (WHITE))
+			ImageDraw.Draw(dc, RGBA).ellipse((tl_fig, tl_fig, br_fig, br_fig), WHITE)
+		if figure_shape == SQUARE:
+			ImageDraw.Draw(dc, RGBA).rectangle((tl_fig, tl_fig, br_fig, br_fig), WHITE)
 		if figure_shape is False:
-			ImageDraw.Draw(dc, "RGBA").ellipse((pad, pad, size, size), (WHITE))
-			ImageDraw.Draw(dc, "RGBA").rectangle((pad, pad, size // 2, size), (WHITE))
-		if orientation in [OR_RIGHT, OR_LEFT, OR_DOWN] and figure_shape is False:
-			pr("\t@TExperiment.figure() -> orientation_reached: TRUE, orientation:{0}, figure_shape:{1}".format(orientation, figure_shape), 1)
-			if orientation == OR_RIGHT:
-				dc = dc.rotate(90)
-			elif orientation == OR_DOWN:
-				dc = dc.rotate(180)
-			else:
-				dc = dc.rotate(270)
-		cookie_cutter = from_aggdraw_context(dc)
-		dough = aggdraw.Draw('RGBA', (dc_size, dc_size), (0, 0, 0, 0))
-		dough.rectangle((0, 0, dc_size, dc_size), aggdraw.Brush((255,255,255), 255))
+			ImageDraw.Draw(dc, RGBA).ellipse((tl_fig, tl_fig, br_fig, br_fig), WHITE)
+			ImageDraw.Draw(dc, RGBA).rectangle((tl_fig, tl_fig, rect_right, br_fig), WHITE)
+		if orientation > 0: dc = dc.rotate(orientation)
+		cookie_cutter = from_aggdraw_context(dc.resize((dc_size // 2, dc_size // 2), Image.ANTIALIAS))
+		dough = Image.new(RGBA,  (dc_size // 2, dc_size // 2), WHITE)
+		ImageDraw.Draw(dough, RGBA).rectangle((0, 0, dc_size // 2, dc_size // 2), WHITE)
 		dough = from_aggdraw_context(dough)
 		dough.mask(cookie_cutter, (0, 0))
+		pr("@PExperiment.mask() exiting", 1)
 		return dough
 
-	def mask(self, diameter, peripheral):
-		pr("@PExperiment.mask() reached", 1)
-		pr("\t@TExperiment.mask(diameter={0}, peripheral={1})".format(diameter, peripheral, 1))
+	def mask(self, diameter, mask_type):
+		pr("@PExperiment.mask() reached", 2)
+		pr("\t@TExperiment.mask(diameter={0}, peripheral={1})".format(diameter, mask_type, 2))
+		MASK_COLOR = NEUTRAL_COLOR
+		diameter_deg = diameter
 		diameter = deg_to_px(diameter)
-		bg = None
-		mask = None
+		stim_size = deg_to_px(self.stim_size)
+		pad =  self.stim_pad  # note, just borrowing this padding value, it's use is not related to the stimuli at all
 
-		if peripheral:
-			blur_size = int(diameter * 0.1)
-			bg_attributes = [int(deg_to_px(self.stim_size * 2)), NEUTRAL_COLOR]
-		else:
-			blur_size = int(diameter * 0.05)
-			bg_attributes = [int(diameter), NEUTRAL_COLOR]
+		if mask_type == PERIPHERAL:
+			# Create maskable space hack:
+			# 	Minimize the size of the peripheral mask by simply painting the screen a neutral color any time
+			# 	the peripheral mask would only be revealing a neutral color.
+			r = diameter // 2 + stim_size // 2
+			scx =  Params.screen_c[0]
+			scy =  Params.screen_c[1]
+			self.eyelink.add_gaze_boundary("{0}_{1}".format(mask_type, diameter_deg), [(scx - r, scy - r), (scx + r, scy + r)])
 
-		bg = Image.new("RGBA", (bg_attributes[0], bg_attributes[0]), bg_attributes[1])
 
-		tl = int(0.333 * diameter)
-		br = diameter - tl
+			# Create solid background
+			bg_size = diameter + pad + 2 * stim_size
+			bg = Image.new(RGBA, (bg_size, bg_size), MASK_COLOR)
+			pr("\t@Tbg_size (PERIPHERAL): {0}".format(bg_size), 2)
 
-		if peripheral:
-			alpha_mask = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
-			alpha_mask_canvas = ImageDraw.Draw(alpha_mask, "RGBA").ellipse((tl, tl, br, br), (WHITE), (255, 0, 0, 255))
-			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(blur_size))
+			# Create an alpha mask
+			tl = pad // 2 + stim_size
+			br = bg_size - tl
+			alpha_mask = Image.new(RGBA, (bg_size, bg_size), TRANSPARENT)
+			ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), WHITE, MASK_COLOR)
+			alpha_mask = alpha_mask.filter( ImageFilter.GaussianBlur(self.mask_blur_width) )
 			alpha_mask = from_aggdraw_context(alpha_mask)
+
+			# render mask
 			mask = from_aggdraw_context(bg)
-			tl = mask.width // 2 -  alpha_mask.width // 2
-			br = tl
-			pr("\t@T p_mask: {0}, a_mask: {3},  tl: {1}, br: {2}".format(mask, tl, br, alpha_mask), 2)
-			mask.mask(alpha_mask, (tl,br), True)
-		else:
-			alpha_mask = Image.new("RGBA", (bg_attributes[0], bg_attributes[0]), (WHITE))
-			alpha_mask_canvas = ImageDraw.Draw(alpha_mask, "RGBA").ellipse((tl, tl, br, br), (0, 0, 0, 255), (255, 0, 0, 255))
-			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(blur_size))
+			mask.mask(alpha_mask, (0, 0), True)
+
+		if mask_type == CENTRAL:
+			# Create solid background
+			bg_size = diameter + pad
+			bg = Image.new(RGBA, (bg_size, bg_size), MASK_COLOR)
+			tl = pad // 2
+			br = bg_size - tl
+			pr("\t@Tbg_size (CENTRAL): {0}".format(bg_size), 2)
+
+			# Create an alpha mask
+			alpha_mask = Image.new(RGBA, (bg_size, bg_size), WHITE)
+			ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), BLACK)
+			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width))
 			alpha_mask = from_aggdraw_context(alpha_mask)
-			# bg_canvas = ImageDraw.Draw(bg, "RGBA").ellipse((tl, tl, br, br), NEUTRAL_COLOR, (0, 0, 0, 0))
-			# bg = bg.filter(ImageFilter.GaussianBlur(blur_size))
+			pr("\t@T alpha_mask.width: {0}, alpha_mask.height{1}".format(alpha_mask.width, alpha_mask.height), 2)
+
+			# render mask
 			mask = from_aggdraw_context(bg)
 			mask.mask(alpha_mask, (0,0), True)
-		pr("@BExperiment.mask() exiting")
+		pr("@BExperiment.mask() exiting", 2)
 		return mask
 
-	def screen_refresh(self, texture, mask, mask_type):
-		pr("@P refresh_screen(texture, mask, mask_type) : {0}, {1}, {2}".format(texture, mask, mask_type), 2)
-		try:
-			position = self.eyelink.gaze()
-		except:
-			position = mouse_pos()
+	def screen_refresh(self, stim, mask, mask_type, gaze_boundary=False):
+		pr("@P refresh_screen(texture, mask, mask_type) : {0}, {1}, {2}".format(stim, mask, mask_type), 2)
+		position = self.eyelink.gaze() if Params.eye_tracker_available else mouse_pos()
 		self.fill()
-		self.blit(texture, 5, 'center')
-		if mask_type != FULL:
-			if self.eyelink.within_boundary('stim_space', position) is False:
-				mask = self.pseudo_mask
-				position = 'center'
-			self.blit(mask, 5, position)
-			if Params.debug_level > 0:
+		self.blit(stim, 5, 'center')
+		if not position:
+			mask = self.pseudo_mask
+			position = 'center'
+		if mask_type == PERIPHERAL and self.eyelink.within_boundary(gaze_boundary, position) is False:
+			mask = self.pseudo_mask
+			position = 'center'
+		self.blit(mask, 5, position)
+		if Params.debug_level > 0:
 				self.blit(self.gaze_debug_dot, 5, mouse_pos())
 		self.flip()
 
