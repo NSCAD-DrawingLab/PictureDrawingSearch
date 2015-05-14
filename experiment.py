@@ -15,8 +15,8 @@ Params.screen_x = 1024
 Params.screen_y = 768
 Params.default_fill_color = (100, 100, 100, 255)
 
-Params.debug_level = 10
-Params.collect_demographics = True
+Params.debug_level = 0
+Params.collect_demographics = False
 Params.practicing = True
 Params.eye_tracking = True
 Params.eye_tracker_available = False
@@ -29,18 +29,16 @@ Params.trials_per_practice_block = 3
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
 """
-CIRCLE = "CIRCLE"
-SQUARE = "SQUARE"
-
-FIGURE = "FIGURE"
-BACKGROUND = "BACKGROUND"
+CIRCLE = "circle"
+SQUARE = "square"
+FIGURE = "figure"
+BACKGROUND = "background"
 OR_UP = "ROTATED_0_DEG"
 OR_RIGHT = "ROTATED_90_DEG"
 OR_DOWN = "ROTATED_180_DEG"
 OR_LEFT = "ROTATED_270_DEG"
-FULL = "MASK_F"
-CENTRAL = "MASK_C"
-PERIPHERAL = "MASK_P"
+CENTRAL = "central"
+PERIPHERAL = "peripheral"
 FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
 FIX_CENTRAL = Params.screen_c
 FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
@@ -60,12 +58,6 @@ EXPERIMENT FACTORS & 'METAFACTORS' (ie. between-block variations as against betw
 """
 
 Params.exp_meta_factors = {"fixation": [FIX_TOP, FIX_CENTRAL, FIX_BOTTOM]}
-
-Params.exp_factors = [("mask_type", [CENTRAL, PERIPHERAL]),
-					  ("mask_size", [4, 6, 8]),  # degrees of visual angle
-					  ("target_level", [FIGURE, BACKGROUND]),
-					  ("target_shape", [SQUARE, CIRCLE]),
-					]
 
 """
 This code defines a  class that 'extends' the basic KLExperiment class.
@@ -132,7 +124,7 @@ class FGSearch(klibs.Experiment):
 				self.maximum_mask_size -= 1
 			else:
 				max_mask_px = new_max_mask_px
-		for size in Params.exp_factors[1][1]:
+		for size in self.trial_factory.exp_parameters[1][1]:
 			if size > self.maximum_mask_size:
 				e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
 				raise ValueError(e_str)
@@ -142,7 +134,7 @@ class FGSearch(klibs.Experiment):
 		self.clear()
 		self.message("Rendering masks...", font_size=48, location=Params.screen_c, registration=5, flip=True)
 		self.masks = {}
-		for size in Params.exp_factors[1][1]:
+		for size in self.trial_factory.exp_parameters[1][1]:
 			pump()
 			self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL)
 			self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL)
@@ -195,7 +187,7 @@ class FGSearch(klibs.Experiment):
 		self.clear()
 		pr("@BExperiment.trial_prep() exiting", 2)
 
-	def trial(self, trial_factors, trial_num):
+	def trial(self, trial_num, trial_factors):
 		"""
 		trial_factors: 1 = mask_type, 2 = mask_size, 3 = target_level, 4 = target_shape]
 		"""
