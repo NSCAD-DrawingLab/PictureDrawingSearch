@@ -9,20 +9,22 @@ import random
 import sdl2
 import copy
 
+
+
 Params.screen_x = 1024
 Params.screen_y = 768
 Params.default_fill_color = (100, 100, 100, 255)
 
-Params.debug_level = 1
+Params.debug_level = 10
 Params.collect_demographics = True
-Params.practicing = False
+Params.practicing = True
 Params.eye_tracking = True
 Params.eye_tracker_available = False
 
-Params.blocks_per_experiment = 1
-Params.trials_per_block = 96
-Params.practice_blocks = None
-Params.trials_per_practice_block = None
+Params.blocks_per_experiment = 2
+Params.trials_per_block = 5
+Params.practice_blocks_per_experiment = 3
+Params.trials_per_practice_block = 3
 
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
@@ -52,13 +54,15 @@ DARK_GREY= (45, 45, 45, 255)
 NEUTRAL_COLOR = Params.default_fill_color
 TRANSPARENT = (0, 0, 0, 0)
 RGBA = "RGBA"
+
 """
-EXPERIMENT FACTORS & 'METAFACTOS' (ie. between-block variations as against between-trial)
+EXPERIMENT FACTORS & 'METAFACTORS' (ie. between-block variations as against between-trial)
 """
+
 Params.exp_meta_factors = {"fixation": [FIX_TOP, FIX_CENTRAL, FIX_BOTTOM]}
-						   
+
 Params.exp_factors = [("mask_type", [CENTRAL, PERIPHERAL]),
-					  ("mask_size", [4, 8, 10]),
+					  ("mask_size", [4, 6, 8]),  # degrees of visual angle
 					  ("target_level", [FIGURE, BACKGROUND]),
 					  ("target_shape", [SQUARE, CIRCLE]),
 					]
@@ -101,9 +105,8 @@ class FGSearch(klibs.Experiment):
 		self.stim_pad = deg_to_px(self.stim_pad)
 		self.__generate_masks()
 		self.__generate_stimuli()
-
-
 		self.__generate_fixations()
+
 		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["CIRCLE", "SQUARE"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
 		# debugging dot for gaze coordinates
@@ -114,8 +117,7 @@ class FGSearch(klibs.Experiment):
 		padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
 		pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
 		self.pseudo_mask = from_aggdraw_context(pseudo_mask)
-
-		#self.collect_demographics()
+		self.collect_demographics()
 		self.eyelink.setup()
 		pr("@BExperiment.setup() exiting", 2)
 
@@ -146,33 +148,24 @@ class FGSearch(klibs.Experiment):
 			self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL)
 
 	def __generate_stimuli(self):
+		self.clear()
 		self.message("Generating stimuli...", font_size=48, location=Params.screen_c, registration=5, flip=True)
-		# render all the stimuli in advance to save on load times later
-		self.textures = {
-		CIRCLE: self.texture(CIRCLE, 0),
-		SQUARE: self.texture(SQUARE, 0),
-		"D_0": self.texture(False, 0),
-		"D_90": self.texture(False, 90),
-		"D_180": self.texture(False, 180),
-		"D_270": self.texture(False, 270)}
+		stimuli_labels = [[(False, 0), (CIRCLE, 0)], [(False, 90), (CIRCLE, 0)], [(False, 180), (CIRCLE, 0)],
+						  [(False, 270), (CIRCLE, 0)],
+						  [(False, 0), (SQUARE, 0)], [(False, 90), (SQUARE, 0)], [(False, 180), (SQUARE, 0)],
+						  [(False, 270), (SQUARE, 0)],
+						  [(CIRCLE, 0), (False, 0)], [(CIRCLE, 0), (False, 90)], [(CIRCLE, 0), (False, 180)],
+						  [(CIRCLE, 0), (False, 270)],
+						  [(SQUARE, 0), (False, 0)], [(SQUARE, 0), (False, 90)], [(SQUARE, 0), (False, 180)],
+						  [(SQUARE, 0), (False, 270)]]
 
-		self.figures = {
-		CIRCLE: self.figure(CIRCLE, 0),
-		SQUARE: self.figure(SQUARE, 0),
-		"D_0": self.figure(False, 0),
-		"D_90": self.figure(False, 90),
-		"D_180": self.figure(False, 180),
-		"D_270": self.figure(False, 270)}
-
-		stimuli_labels = [["D_0", "CIRCLE"], ["D_90", "CIRCLE"], ["D_180", "CIRCLE"], ["D_270", "CIRCLE"],
-						  ["D_0", "SQUARE"], ["D_90", "SQUARE"], ["D_180", "SQUARE"], ["D_270", "SQUARE"],
-						  ["CIRCLE", "D_0"], ["CIRCLE", "D_90"], ["CIRCLE", "D_180"], ["CIRCLE", "D_270"],
-						  ["SQUARE", "D_0"], ["SQUARE", "D_90"], ["SQUARE", "D_180"], ["SQUARE", "D_270"]]
-
-		for label in stimuli_labels:
-			stim = copy.deepcopy(self.textures[label[1]])
-			figure = copy.deepcopy(self.figures[label[0]])
-			self.stimuli["{0}_{1}".format(label[0], label[1])] = stim
+		for sl in stimuli_labels:
+			stim = self.texture(sl[1][0], sl[1][1])
+			figure = self.figure(sl[0][0], sl[0][1])
+			stim.mask(figure, (0, 0))
+			fig_text = sl[0][0] if sl[0][0] in (CIRCLE, SQUARE) else "D_%s" % sl[0][1]
+			texture_text = sl[1][0] if sl[1][0] in (CIRCLE, SQUARE) else "D_%s" % sl[1][1]
+			self.stimuli["{0}_{1}".format(fig_text, texture_text)] = stim
 
 	def __generate_fixations(self):
 		Params.exp_meta_factors['fixation'] = [Params.screen_c,
@@ -411,15 +404,12 @@ class FGSearch(klibs.Experiment):
 		position = self.eyelink.gaze() if Params.eye_tracker_available else mouse_pos()
 		self.fill()
 		self.blit(stim, 5, 'center')
-		if not position:
-			mask = self.pseudo_mask
-			position = 'center'
-		if mask_type == PERIPHERAL and self.eyelink.within_boundary(gaze_boundary, position) is False:
-			mask = self.pseudo_mask
-			position = 'center'
-		self.blit(mask, 5, position)
-		if Params.debug_level > 0:
-				self.blit(self.gaze_debug_dot, 5, mouse_pos())
-		self.flip()
+		if (mask_type == PERIPHERAL and self.eyelink.within_boundary(gaze_boundary, position) is False) or not position:
+			self.clear()
+		else:
+			self.blit(mask, 5, position)
+			if Params.debug_level > 0:
+					self.blit(self.gaze_debug_dot, 5, mouse_pos())
+			self.flip()
 
 app = FGSearch("FGSearch").run()

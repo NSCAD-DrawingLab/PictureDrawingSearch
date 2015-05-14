@@ -4,8 +4,7 @@ CREATE TABLE participants (
 	gender text not null, 
 	age integer not null, 
 	handedness text not null,
-	created text not null,
-	modified text not null --not implemented yet (ie. it is set equal to created at creation but no modification logic exists in Klibs
+	created text not null
 );
 
 CREATE TABLE trials (
