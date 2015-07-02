@@ -10,9 +10,6 @@ import sdl2
 import copy
 
 
-
-Params.screen_x = 1024
-Params.screen_y = 768
 Params.default_fill_color = (100, 100, 100, 255)
 
 Params.debug_level = 0
@@ -21,8 +18,8 @@ Params.practicing = True
 Params.eye_tracking = True
 Params.eye_tracker_available = False
 
-Params.blocks_per_experiment = 2
-Params.trials_per_block = 5
+Params.blocks_per_experiment = 4
+Params.trials_per_block = 24
 Params.practice_blocks_per_experiment = 3
 Params.trials_per_practice_block = 3
 
@@ -39,9 +36,9 @@ OR_DOWN = "ROTATED_180_DEG"
 OR_LEFT = "ROTATED_270_DEG"
 CENTRAL = "central"
 PERIPHERAL = "peripheral"
-FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
-FIX_CENTRAL = Params.screen_c
-FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
+FIX_TOP = None
+FIX_CENTRAL =None
+FIX_BOTTOM = None
 SEARCH_RESPONSE_KEYS = "FGSearch_response"
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
@@ -90,7 +87,12 @@ class FGSearch(klibs.Experiment):
 	gaze_debug_dot = None
 
 	def __init__(self, *args, **kwargs):
-		klibs.Experiment.__init__(self, *args, **kwargs)
+		# klibs.Experiment.__init__(self, *args, **kwargs)
+		super(FGSearch, self).__init__(*args, **kwargs)
+
+		FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
+		FIX_CENTRAL = Params.screen_c
+		FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 
 	def setup(self):
 		pr("@PExperiment.setup() reached", 2)
@@ -183,7 +185,6 @@ class FGSearch(klibs.Experiment):
 
 	def trial_prep(self, *args, **kwargs):
 		pr("@PExperiment.trial_prep() reached", 2)
-		self.database.init_entry('trials')
 		self.clear()
 		pr("@BExperiment.trial_prep() exiting", 2)
 
@@ -206,7 +207,10 @@ class FGSearch(klibs.Experiment):
 			stim_label = "D_{0}_{1}".format(orientation, trial_factors[4])
 		stim = self.stimuli[stim_label]
 		mask_label = "{0}_{1}".format(trial_factors[1], trial_factors[2])
-		mask = self.masks[mask_label]
+		try:
+			mask = self.masks[mask_label]
+		except KeyError:
+			mask = None  # for the no mask condition, easier than creating empty keys in self.masks
 
 		# start the trial
 		self.message("Press any key to advance...", color=WHITE, location="center", font_size=48, flip=False)
@@ -399,9 +403,12 @@ class FGSearch(klibs.Experiment):
 		if (mask_type == PERIPHERAL and self.eyelink.within_boundary(gaze_boundary, position) is False) or not position:
 			self.clear()
 		else:
-			self.blit(mask, 5, position)
+			if mask is not None:
+				self.blit(mask, 5, position)
 			if Params.debug_level > 0:
 					self.blit(self.gaze_debug_dot, 5, mouse_pos())
-			self.flip()
+		self.flip()
 
-app = FGSearch("FGSearch").run()
+# app = FGSearch("FGSearch").run()
+# app = FGSearch("FGSearch", export=[True, False])
+app = FGSearch("FGSearch", 27).run()
