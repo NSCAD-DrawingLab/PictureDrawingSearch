@@ -1,0 +1,1 @@
+participant	gender	age	handedness	block_num	trial_num	practicing	mask_type	mask_size	background	figure	d_orientation	rt	response	initial_fixation

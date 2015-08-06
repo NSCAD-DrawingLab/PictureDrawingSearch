@@ -10,9 +10,9 @@ import sdl2
 import copy
 
 
-Params.default_fill_color = (100, 100, 100, 255)
+Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
 
-Params.debug_level = 0
+Params.debug_level = 3
 Params.collect_demographics = False
 Params.practicing = True
 Params.eye_tracking = True
@@ -28,8 +28,8 @@ DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
 """
 CIRCLE = "circle"
 SQUARE = "square"
-FIGURE = "figure"
-BACKGROUND = "background"
+LOCAL = "local"
+GLOBAL = "global"
 OR_UP = "ROTATED_0_DEG"
 OR_RIGHT = "ROTATED_90_DEG"
 OR_DOWN = "ROTATED_180_DEG"
@@ -88,20 +88,22 @@ class FGSearch(klibs.Experiment):
 
 	def __init__(self, *args, **kwargs):
 		# klibs.Experiment.__init__(self, *args, **kwargs)
+
 		super(FGSearch, self).__init__(*args, **kwargs)
 
 		FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
 		FIX_CENTRAL = Params.screen_c
 		FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 
+
 	def setup(self):
 		pr("@PExperiment.setup() reached", 2)
 		self.stim_pad = deg_to_px(self.stim_pad)
-		self.__generate_masks()
-		self.__generate_stimuli()
-		self.__generate_fixations()
+		# self.__generate_masks()
+		# self.__generate_stimuli()
+		# self.__generate_fixations()
 
-		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["CIRCLE", "SQUARE"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
+		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
 		# debugging dot for gaze coordinates
 		gaze_debug_dot = Image.new(RGBA, (5, 5), TRANSPARENT)
@@ -199,7 +201,7 @@ class FGSearch(klibs.Experiment):
 		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
 
 		# infer which mask & stim to use and retrieve them
-		figure = trial_factors[4] if trial_factors[3] == FIGURE else False
+		figure = trial_factors[4] if trial_factors[3] == LOCAL else False
 		stim_label = None
 		if figure:
 			stim_label = "{0}_D_{1}".format(trial_factors[4], orientation)
@@ -240,9 +242,9 @@ class FGSearch(klibs.Experiment):
 				"rt": float(resp[1]),
 				"mask_type": trial_factors[1],
 				"mask_size": trial_factors[2],
-				"figure": trial_factors[3],
+				"local": trial_factors[4] if trial_factors[3] == LOCAL else "D",
+				"global": trial_factors[4] if trial_factors[3] == GLOBAL else "D",
 				"d_orientation": orientation,
-				"background": trial_factors[4],
 				"trial_num": trial_num,
 				"block_num": Params.block_number,
 				"initial_fixation": initial_fixation}
@@ -410,5 +412,5 @@ class FGSearch(klibs.Experiment):
 		self.flip()
 
 # app = FGSearch("FGSearch").run()
-# app = FGSearch("FGSearch", export=[True, False])
-app = FGSearch("FGSearch", 27).run()
+app = FGSearch("FGSearch", 27, export=[True, True])
+# app = FGSearch("FGSearch", 27).run()
