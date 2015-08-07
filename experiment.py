@@ -26,6 +26,9 @@ Params.trials_per_practice_block = 3
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
 """
+Params.fixation_top = [None, None]
+Params.fixation_central = [None, None]
+Params.fixation_bottom = [None, None]
 CIRCLE = "circle"
 SQUARE = "square"
 LOCAL = "local"
@@ -36,9 +39,6 @@ OR_DOWN = "ROTATED_180_DEG"
 OR_LEFT = "ROTATED_270_DEG"
 CENTRAL = "central"
 PERIPHERAL = "peripheral"
-FIX_TOP = None
-FIX_CENTRAL =None
-FIX_BOTTOM = None
 SEARCH_RESPONSE_KEYS = "FGSearch_response"
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
@@ -54,7 +54,7 @@ RGBA = "RGBA"
 EXPERIMENT FACTORS & 'METAFACTORS' (ie. between-block variations as against between-trial)
 """
 
-Params.exp_meta_factors = {"fixation": [FIX_TOP, FIX_CENTRAL, FIX_BOTTOM]}
+Params.exp_meta_factors = {"fixation": [Params.fixation_top, Params.fixation_central, Params.fixation_bottom]}
 
 """
 This code defines a  class that 'extends' the basic KLExperiment class.
@@ -91,17 +91,17 @@ class FGSearch(klibs.Experiment):
 
 		super(FGSearch, self).__init__(*args, **kwargs)
 
-		FIX_TOP = (Params.screen_x // 2, Params.screen_y // 4)
-		FIX_CENTRAL = Params.screen_c
-		FIX_BOTTOM = (Params.screen_x // 2, 3 * Params.screen_y // 4)
+		Params.fixation_top = (Params.screen_x // 2, Params.screen_y // 4)
+		Params.fixation_central = Params.screen_c
+		Params.fixation_bottom = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 
 
 	def setup(self):
 		pr("@PExperiment.setup() reached", 2)
 		self.stim_pad = deg_to_px(self.stim_pad)
-		# self.__generate_masks()
-		# self.__generate_stimuli()
-		# self.__generate_fixations()
+		self.__generate_masks()
+		self.__generate_stimuli()
+		self.__generate_fixations()
 
 		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
@@ -230,9 +230,9 @@ class FGSearch(klibs.Experiment):
 
 		#  create readable data as fixation is currently in (x,y) coordinates
 		initial_fixation = None
-		if self.fixation == FIX_TOP:
+		if self.fixation == Params.fixation_top:
 			initial_fixation = "TOP"
-		elif self.fixation == FIX_CENTRAL:
+		elif self.fixation == Params.fixation_central:
 			initial_fixation = "CENTRAL"
 		else:
 			initial_fixation = "BOTTOM"
@@ -412,5 +412,5 @@ class FGSearch(klibs.Experiment):
 		self.flip()
 
 # app = FGSearch("FGSearch").run()
-app = FGSearch("FGSearch", 27, export=[True, True])
-# app = FGSearch("FGSearch", 27).run()
+# app = FGSearch("FGSearch", 27, export=[True, True])
+app = FGSearch("FGSearch", 27).run()
