@@ -13,10 +13,10 @@ import copy
 Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
 
 Params.debug_level = 3
-Params.collect_demographics = False
+Params.collect_demographics = True
 Params.practicing = True
 Params.eye_tracking = True
-Params.eye_tracker_available = False
+Params.eye_tracker_available = True
 
 Params.blocks_per_experiment = 4
 Params.trials_per_block = 24
@@ -87,7 +87,6 @@ class FGSearch(klibs.Experiment):
 	gaze_debug_dot = None
 
 	def __init__(self, *args, **kwargs):
-		# klibs.Experiment.__init__(self, *args, **kwargs)
 
 		super(FGSearch, self).__init__(*args, **kwargs)
 
@@ -99,9 +98,9 @@ class FGSearch(klibs.Experiment):
 	def setup(self):
 		pr("@PExperiment.setup() reached", 2)
 		self.stim_pad = deg_to_px(self.stim_pad)
-		self.__generate_masks()
-		self.__generate_stimuli()
-		self.__generate_fixations()
+		# self.__generate_masks()
+		# self.__generate_stimuli()
+		# self.__generate_fixations()
 
 		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
