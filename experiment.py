@@ -13,15 +13,15 @@ import copy
 Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
 
 Params.debug_level = 3
-Params.collect_demographics = False
-Params.practicing = True
+Params.collect_demographics = True
+Params.practicing = False
 Params.eye_tracking = True
 Params.eye_tracker_available = False
 
-Params.blocks_per_experiment = 4
-Params.trials_per_block = 24
-Params.practice_blocks_per_experiment = 3
-Params.trials_per_practice_block = 3
+Params.blocks_per_experiment = 1
+Params.trials_per_block = 4
+Params.practice_blocks_per_experiment = 0
+Params.trials_per_practice_block = 0
 
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
@@ -61,15 +61,15 @@ This code defines a  class that 'extends' the basic KLExperiment class.
 The experiment itself is actually *run* at the end of this document, after it's been defined.
 """
 
-class FGSearch(klibs.Experiment):
-	stim_size = 4  # degrees of visual angle
-	stim_pad = 0.4 # degrees of visual angle
+class FigureGroundSearch(klibs.Experiment):
+	stim_size = 8  # degrees of visual angle
+	stim_pad = 0.8 # degrees of visual angle
 	mask_blur_width = 4  # pixels
 	maximum_mask_size = 0  # automatically set at run time, do not change
 	search_time = 30  # seconds
 	fixation = None  # chosen randomly each trial
-	bg_element_size = 0.4  # degrees of visual angle
-	bg_element_pad = 0.3  # degrees of visual angle
+	bg_element_size = 0.8  # degrees of visual angle
+	bg_element_pad = 0.6  # degrees of visual angle
 	orientations = [0, 90, 180, 270]
 
 	neutral_color = Params.default_fill_color
@@ -87,9 +87,7 @@ class FGSearch(klibs.Experiment):
 	gaze_debug_dot = None
 
 	def __init__(self, *args, **kwargs):
-		# klibs.Experiment.__init__(self, *args, **kwargs)
-
-		super(FGSearch, self).__init__(*args, **kwargs)
+		super(FigureGroundSearch, self).__init__(*args, **kwargs)
 
 		Params.fixation_top = (Params.screen_x // 2, Params.screen_y // 4)
 		Params.fixation_central = Params.screen_c
@@ -97,7 +95,6 @@ class FGSearch(klibs.Experiment):
 
 
 	def setup(self):
-		pr("@PExperiment.setup() reached", 2)
 		self.stim_pad = deg_to_px(self.stim_pad)
 		self.__generate_masks()
 		self.__generate_stimuli()
@@ -113,9 +110,7 @@ class FGSearch(klibs.Experiment):
 		padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
 		pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
 		self.pseudo_mask = from_aggdraw_context(pseudo_mask)
-		self.collect_demographics()
 		self.eyelink.setup()
-		pr("@BExperiment.setup() exiting", 2)
 
 	def __generate_masks(self):
 		max_mask_px = 0
@@ -182,19 +177,18 @@ class FGSearch(klibs.Experiment):
 		self.eyelink.add_gaze_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br])
 
 	def block(self, block_num):
-		pr("@PExperiment.block() reached", 2)
-		pr("@BExperiment.block() exiting", 2)
+		pass
 
-	def trial_prep(self, *args, **kwargs):
-		pr("@PExperiment.trial_prep() reached", 2)
+
+	def trial_prep(self, trial_factors):
 		self.clear()
-		pr("@BExperiment.trial_prep() exiting", 2)
 
-	def trial(self, trial_num, trial_factors):
+
+	def trial(self, trial_factors):
 		"""
 		trial_factors: 1 = mask_type, 2 = mask_size, 3 = target_level, 4 = target_shape]
 		"""
-		pr("@PExperiment.trial() reached, @Ttrial_factors: {0}".format(trial_factors), 0)
+
 
 		# choose randomly varying parts of trial
 		orientation = random.choice(self.orientations)
@@ -218,7 +212,7 @@ class FGSearch(klibs.Experiment):
 		self.message("Press any key to advance...", color=WHITE, location="center", font_size=48, flip=False)
 		self.listen()
 		self.drift_correct(self.fixation)
-		self.eyelink.start(trial_num)
+		self.eyelink.start(Params.trial_number)
 		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, stim=stim,
 						   mask=mask, mask_type=trial_factors[1], gaze_boundary=mask_label)
 
@@ -228,7 +222,7 @@ class FGSearch(klibs.Experiment):
 			self.alert("Too slow!", False, 1)
 			self.clear()
 
-		#  create readable data as fixation is currently in (x,y) coordinates
+		#  create readable data as fixation is currrently in (x,y) coordinates
 		initial_fixation = None
 		if self.fixation == Params.fixation_top:
 			initial_fixation = "TOP"
@@ -245,7 +239,7 @@ class FGSearch(klibs.Experiment):
 				"local": trial_factors[4] if trial_factors[3] == LOCAL else "D",
 				"global": trial_factors[4] if trial_factors[3] == GLOBAL else "D",
 				"d_orientation": orientation,
-				"trial_num": trial_num,
+				"trial_num": Params.trial_number,
 				"block_num": Params.block_number,
 				"initial_fixation": initial_fixation}
 
@@ -256,8 +250,8 @@ class FGSearch(klibs.Experiment):
 		pass
 
 	def texture(self, texture_figure, orientation=None):
-		pr("@PExperiment.texture(texture_figure) reached", 2)
-		pr("\t@Ttexture_figure = {0}, orientation = {1}".format(texture_figure, orientation), 2)
+
+
 		grid_size = (deg_to_px(self.stim_size) + self.stim_pad) * 2
 		stim_offset = self.stim_pad // 2
 		dc = Image.new(RGBA, (grid_size, grid_size), TRANSPARENT)
@@ -265,7 +259,7 @@ class FGSearch(klibs.Experiment):
 		grid_cell_size = deg_to_px(self.bg_element_size + self.bg_element_pad)
 		grid_cell_count = grid_size // grid_cell_size
 		stim_offset += (grid_size % grid_cell_size) // 2  # split grid_size %% cells over pad
-		pr("\t@TGridSize: {0}, GridCellSize:{1}, GridCellCount: {2}".format(grid_size // 2, grid_cell_size // 2, grid_cell_count), 1)
+
 
 	 	# Visual Representation of the Texture Rendering Logic
 		# <-------G-------->
@@ -292,7 +286,7 @@ class FGSearch(klibs.Experiment):
 				bottom_in = bottom_out - stroke_width
 				right_out = int(left_out + deg_to_px(self.bg_element_size))
 				right_in = right_out - stroke_width
-				pr("\t@Ttop_out: {0}, left_out: {1}, bottom_out:{2}, right_out:{3}".format(top_out, left_out, bottom_out, right_out), 2)
+
 				if texture_figure == CIRCLE:
 					ImageDraw.Draw(dc, RGBA).ellipse((left_out, top_out, right_out, bottom_out), WHITE)
 					ImageDraw.Draw(dc, RGBA).ellipse((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
@@ -300,7 +294,7 @@ class FGSearch(klibs.Experiment):
 					ImageDraw.Draw(dc, RGBA).rectangle((left_out, top_out, right_out, bottom_out), WHITE)
 					ImageDraw.Draw(dc, RGBA).rectangle((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
 				elif texture_figure is False:
-					pr("\t@Rtexture_figure was FALSE", 2)
+
 					half_el_width = int(0.5 * deg_to_px(self.bg_element_size))
 					rect_right = right_out - half_el_width
 					rect_right_in = right_out - half_el_width - stroke_width
@@ -310,11 +304,11 @@ class FGSearch(klibs.Experiment):
 					ImageDraw.Draw(dc, RGBA, ).rectangle((left_in, top_in, rect_right, bottom_in), NEUTRAL_COLOR)
 		dc = dc.resize((grid_size // 2, grid_size // 2), Image.ANTIALIAS)
 		dc = dc.rotate(orientation)
-		pr("@BExperiment.texture() exiting", 2)
+
 		return from_aggdraw_context(dc)
 
 	def figure(self, figure_shape, orientation):
-		pr("@PExperiment.figure() reached, @Tfigure_shape: {0}, orientation: {1}".format(figure_shape, orientation), 0)
+
 		stim_size_px = deg_to_px(self.stim_size)
 		half_pad = self.stim_pad
 		pad = 2 * self.stim_pad
@@ -337,12 +331,12 @@ class FGSearch(klibs.Experiment):
 		ImageDraw.Draw(dough, RGBA).rectangle((0, 0, dc_size // 2, dc_size // 2), WHITE)
 		dough = from_aggdraw_context(dough)
 		dough.mask(cookie_cutter, (0, 0))
-		pr("@PExperiment.mask() exiting", 1)
+
 		return dough
 
 	def mask(self, diameter, mask_type):
-		pr("@PExperiment.mask() reached", 2)
-		pr("\t@TExperiment.mask(diameter={0}, peripheral={1})".format(diameter, mask_type, 2))
+
+
 		MASK_COLOR = NEUTRAL_COLOR
 		diameter_deg = diameter
 		diameter = deg_to_px(diameter)
@@ -362,7 +356,7 @@ class FGSearch(klibs.Experiment):
 			# Create solid background
 			bg_size = diameter + pad + 2 * stim_size
 			bg = Image.new(RGBA, (bg_size, bg_size), MASK_COLOR)
-			pr("\t@Tbg_size (PERIPHERAL): {0}".format(bg_size), 2)
+
 
 			# Create an alpha mask
 			tl = pad // 2 + stim_size
@@ -382,27 +376,28 @@ class FGSearch(klibs.Experiment):
 			bg = Image.new(RGBA, (bg_size, bg_size), MASK_COLOR)
 			tl = pad // 2
 			br = bg_size - tl
-			pr("\t@Tbg_size (CENTRAL): {0}".format(bg_size), 2)
+
 
 			# Create an alpha mask
 			alpha_mask = Image.new(RGBA, (bg_size, bg_size), WHITE)
 			ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), BLACK)
 			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width))
 			alpha_mask = from_aggdraw_context(alpha_mask)
-			pr("\t@T alpha_mask.width: {0}, alpha_mask.height{1}".format(alpha_mask.width, alpha_mask.height), 2)
+
 
 			# render mask
 			mask = from_aggdraw_context(bg)
 			mask.mask(alpha_mask, (0,0), True)
-		pr("@BExperiment.mask() exiting", 2)
+
 		return mask
 
 	def screen_refresh(self, stim, mask, mask_type, gaze_boundary=False):
-		pr("@P refresh_screen(texture, mask, mask_type) : {0}, {1}, {2}".format(stim, mask, mask_type), 2)
-		position = self.eyelink.gaze() if Params.eye_tracker_available else mouse_pos()
+		position = self.eyelink.gaze()
 		self.fill()
 		self.blit(stim, 5, 'center')
-		if (mask_type == PERIPHERAL and self.eyelink.within_boundary(gaze_boundary, position) is False) or not position:
+		if mask_type == PERIPHERAL and not self.eyelink.within_boundary(gaze_boundary, position):
+			self.clear()
+		elif not position:
 			self.clear()
 		else:
 			if mask is not None:
@@ -413,4 +408,4 @@ class FGSearch(klibs.Experiment):
 
 # app = FGSearch("FGSearch").run()
 # app = FGSearch("FGSearch", 27, export=[True, True])
-app = FGSearch("FGSearch", 27).run()
+# app = FGSearch("FGSearch", 27).run()

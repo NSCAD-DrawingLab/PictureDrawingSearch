@@ -1,2 +1,6 @@
 .idea/*
 .DS_Store
+ExpAssets/FigureGroundSearch.db
+ExpAssets/FigureGroundSearch.db.backup
+ExpAssets/Data/*
+ExpAssets/EDF/*
