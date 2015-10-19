@@ -12,7 +12,7 @@ import copy
 
 Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
 
-Params.debug_level = 3
+Params.debug_level = 0
 Params.collect_demographics = True
 Params.practicing = True
 Params.eye_tracking = True
@@ -96,9 +96,9 @@ class FigureGroundSearch(klibs.Experiment):
 
 	def setup(self):
 		self.stim_pad = deg_to_px(self.stim_pad)
-		# self.__generate_masks()
-		# self.__generate_stimuli()
-		# self.__generate_fixations()
+		self.__generate_masks()
+		self.__generate_stimuli()
+		self.__generate_fixations()
 
 		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
