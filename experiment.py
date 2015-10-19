@@ -14,9 +14,9 @@ Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
 
 Params.debug_level = 3
 Params.collect_demographics = True
-Params.practicing = False
+Params.practicing = True
 Params.eye_tracking = True
-Params.eye_tracker_available = False
+Params.eye_tracker_available = True
 
 Params.blocks_per_experiment = 1
 Params.trials_per_block = 4
@@ -96,9 +96,9 @@ class FigureGroundSearch(klibs.Experiment):
 
 	def setup(self):
 		self.stim_pad = deg_to_px(self.stim_pad)
-		self.__generate_masks()
-		self.__generate_stimuli()
-		self.__generate_fixations()
+		# self.__generate_masks()
+		# self.__generate_stimuli()
+		# self.__generate_fixations()
 
 		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
@@ -127,9 +127,6 @@ class FigureGroundSearch(klibs.Experiment):
 			if size > self.maximum_mask_size:
 				e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
 				raise ValueError(e_str)
-		pr("\t@R self.maximum_mask_size: {0} or: {1}".format(self.maximum_mask_size,
-															 deg_to_px(self.maximum_mask_size) + deg_to_px(
-																 self.stim_size) // 2 + self.stim_pad // 2))
 		self.clear()
 		self.message("Rendering masks...", font_size=48, location=Params.screen_c, registration=5, flip=True)
 		self.masks = {}
@@ -335,8 +332,6 @@ class FigureGroundSearch(klibs.Experiment):
 		return dough
 
 	def mask(self, diameter, mask_type):
-
-
 		MASK_COLOR = NEUTRAL_COLOR
 		diameter_deg = diameter
 		diameter = deg_to_px(diameter)
@@ -406,6 +401,3 @@ class FigureGroundSearch(klibs.Experiment):
 					self.blit(self.gaze_debug_dot, 5, mouse_pos())
 		self.flip()
 
-# app = FGSearch("FGSearch").run()
-# app = FGSearch("FGSearch", 27, export=[True, True])
-# app = FGSearch("FGSearch", 27).run()
