@@ -93,7 +93,6 @@ class FigureGroundSearch(klibs.Experiment):
 		Params.fixation_central = Params.screen_c
 		Params.fixation_bottom = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 
-
 	def setup(self):
 		self.stim_pad = deg_to_px(self.stim_pad)
 		self.__generate_masks()
@@ -176,10 +175,8 @@ class FigureGroundSearch(klibs.Experiment):
 	def block(self, block_num):
 		pass
 
-
 	def trial_prep(self, trial_factors):
 		self.clear()
-
 
 	def trial(self, trial_factors):
 		"""
