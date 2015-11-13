@@ -1,6 +1,7 @@
-.idea/*
-.DS_Store
+.*
 ExpAssets/FigureGroundSearch.db
 ExpAssets/FigureGroundSearch.db.backup
-ExpAssets/Data/*
-ExpAssets/EDF/*
+ExpAssets/Data/*.txt
+ExpAssets/Data/Incomplete/*.txt
+ExpAssets/EDF/*.EDF
+ExpAssets/EDF/Incomplete/*.EDF

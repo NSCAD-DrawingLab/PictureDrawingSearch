@@ -13,10 +13,10 @@ import copy
 Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
 
 Params.debug_level = 0
-Params.collect_demographics = True
-Params.practicing = True
+Params.collect_demographics = False
+Params.practicing = False
 Params.eye_tracking = True
-Params.eye_tracker_available = True
+Params.eye_tracker_available = False
 
 Params.blocks_per_experiment = 1
 Params.trials_per_block = 4
@@ -26,6 +26,7 @@ Params.trials_per_practice_block = 0
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
 """
+#  Fixation positions calculated in FigureGroundSearch.__init__() based on current screen dimensions
 Params.fixation_top = [None, None]
 Params.fixation_central = [None, None]
 Params.fixation_bottom = [None, None]
