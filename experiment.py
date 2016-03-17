@@ -10,26 +10,11 @@ import sdl2
 import copy
 
 
-Params.default_fill_color = (100, 100, 100, 255) # TODO: rotate through seasons
-
-Params.debug_level = 0
-Params.collect_demographics = False
-Params.practicing = False
-Params.eye_tracking = True
-Params.eye_tracker_available = False
-
-Params.blocks_per_experiment = 1
-Params.trials_per_block = 4
-Params.practice_blocks_per_experiment = 0
-Params.trials_per_practice_block = 0
-
 """
 DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
 """
 #  Fixation positions calculated in FigureGroundSearch.__init__() based on current screen dimensions
-Params.fixation_top = [None, None]
-Params.fixation_central = [None, None]
-Params.fixation_bottom = [None, None]
+
 CIRCLE = "circle"
 SQUARE = "square"
 LOCAL = "local"
@@ -54,8 +39,6 @@ RGBA = "RGBA"
 """
 EXPERIMENT FACTORS & 'METAFACTORS' (ie. between-block variations as against between-trial)
 """
-
-Params.exp_meta_factors = {"fixation": [Params.fixation_top, Params.fixation_central, Params.fixation_bottom]}
 
 """
 This code defines a  class that 'extends' the basic KLExperiment class.
@@ -361,7 +344,7 @@ class FigureGroundSearch(klibs.Experiment):
 
 			# render mask
 			mask = from_aggdraw_context(bg)
-			mask.mask(alpha_mask, (0, 0), True)
+			mask.mask(alpha_mask)
 
 		if mask_type == CENTRAL:
 			# Create solid background
@@ -380,7 +363,7 @@ class FigureGroundSearch(klibs.Experiment):
 
 			# render mask
 			mask = from_aggdraw_context(bg)
-			mask.mask(alpha_mask, (0,0), True)
+			mask.mask(alpha_mask)
 
 		return mask
 
