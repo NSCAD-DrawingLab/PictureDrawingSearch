@@ -50,8 +50,30 @@ trials_per_participant = 0
 dm_suppress_debug_pane = False
 dm_auto_threshold = True
 
+#
+#########################################
+# Demographics Questions
+#########################################
+# Note: This list must supply all columns in the configured Participants table except:
+# 	- id
+# 	- participant id
+# 	- random_seed
+#	- klibs_commit (if present)
+#	- created
+# These columns must be present in the participants table (except klibs_commit) and are supplied automatically by klibs
+demographic_questions = [
+	['sex', "What is your sex? \nAnswer with:  (m)ale,(f)emale", ('m', 'M', 'f', 'F'), 'str', 'f'],
+	['handedness', "Are right-handed, left-handed or ambidextrous? \nAnswer with (r)ight, (l)eft or (a)mbidextrous.",
+	 ('r', 'R', 'l', 'L', 'a', 'A'), 'str', 'r'],
+	['age', 'What is  your age?', None, 'int', -1]
+]
+
+#
+#########################################
 # PROJECT-SPECIFIC VARS
+#########################################
 fixation_top = [None, None]
 fixation_central = [None, None]
 fixation_bottom = [None, None]
 exp_meta_factors = {"fixation": [fixation_top, fixation_central, fixation_bottom]}
+

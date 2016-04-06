@@ -46,7 +46,7 @@ The experiment itself is actually *run* at the end of this document, after it's 
 """
 
 class FigureGroundSearch(klibs.Experiment):
-	stim_size = 8  # degrees of visual angle
+	stim_size = 12  # degrees of visual angle
 	stim_pad = 0.8 # degrees of visual angle
 	mask_blur_width = 4  # pixels
 	maximum_mask_size = 0  # automatically set at run time, do not change
@@ -78,6 +78,7 @@ class FigureGroundSearch(klibs.Experiment):
 		Params.fixation_bottom = (Params.screen_x // 2, 3 * Params.screen_y // 4)
 
 	def setup(self):
+		self.text_manager.add_style('q_and_a', 48, WHITE)
 		self.stim_pad = deg_to_px(self.stim_pad)
 		self.__generate_masks()
 		self.__generate_stimuli()
@@ -88,11 +89,11 @@ class FigureGroundSearch(klibs.Experiment):
 		# debugging dot for gaze coordinates
 		gaze_debug_dot = Image.new(RGBA, (5, 5), TRANSPARENT)
 		ImageDraw.Draw(gaze_debug_dot , RGBA).ellipse((0, 0, 5, 5), RED, BLACK)
-		self.gaze_debug_dot = from_aggdraw_context(gaze_debug_dot)
+		self.gaze_debug_dot = aggdraw_to_numpy_surface(gaze_debug_dot)
 
 		padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
 		pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
-		self.pseudo_mask = from_aggdraw_context(pseudo_mask)
+		self.pseudo_mask = aggdraw_to_numpy_surface(pseudo_mask)
 		self.eyelink.setup()
 
 	def __generate_masks(self):
@@ -111,7 +112,7 @@ class FigureGroundSearch(klibs.Experiment):
 				e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
 				raise ValueError(e_str)
 		self.clear()
-		self.message("Rendering masks...", font_size=48, location=Params.screen_c, registration=5, flip=True)
+		self.message("Rendering masks...", "q_and_a", location=Params.screen_c, registration=5, flip=True)
 		self.masks = {}
 		for size in self.trial_factory.exp_parameters[1][1]:
 			pump()
@@ -120,7 +121,7 @@ class FigureGroundSearch(klibs.Experiment):
 
 	def __generate_stimuli(self):
 		self.clear()
-		self.message("Generating stimuli...", font_size=48, location=Params.screen_c, registration=5, flip=True)
+		self.message("Generating stimuli...","q_and_a", location=Params.screen_c, registration=5, flip=True)
 		stimuli_labels = [[(False, 0), (CIRCLE, 0)], [(False, 90), (CIRCLE, 0)], [(False, 180), (CIRCLE, 0)],
 						  [(False, 270), (CIRCLE, 0)],
 						  [(False, 0), (SQUARE, 0)], [(False, 90), (SQUARE, 0)], [(False, 180), (SQUARE, 0)],
@@ -283,7 +284,7 @@ class FigureGroundSearch(klibs.Experiment):
 		dc = dc.resize((grid_size // 2, grid_size // 2), Image.ANTIALIAS)
 		dc = dc.rotate(orientation)
 
-		return from_aggdraw_context(dc)
+		return aggdraw_to_numpy_surface(dc)
 
 	def figure(self, figure_shape, orientation):
 
@@ -304,10 +305,10 @@ class FigureGroundSearch(klibs.Experiment):
 			ImageDraw.Draw(dc, RGBA).ellipse((tl_fig, tl_fig, br_fig, br_fig), WHITE)
 			ImageDraw.Draw(dc, RGBA).rectangle((tl_fig, tl_fig, rect_right, br_fig), WHITE)
 		if orientation > 0: dc = dc.rotate(orientation)
-		cookie_cutter = from_aggdraw_context(dc.resize((dc_size // 2, dc_size // 2), Image.ANTIALIAS))
+		cookie_cutter = aggdraw_to_numpy_surface(dc.resize((dc_size // 2, dc_size // 2), Image.ANTIALIAS))
 		dough = Image.new(RGBA,  (dc_size // 2, dc_size // 2), WHITE)
 		ImageDraw.Draw(dough, RGBA).rectangle((0, 0, dc_size // 2, dc_size // 2), WHITE)
-		dough = from_aggdraw_context(dough)
+		dough = aggdraw_to_numpy_surface(dough)
 		dough.mask(cookie_cutter, (0, 0))
 
 		return dough
@@ -340,10 +341,10 @@ class FigureGroundSearch(klibs.Experiment):
 			alpha_mask = Image.new(RGBA, (bg_size, bg_size), TRANSPARENT)
 			ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), WHITE, MASK_COLOR)
 			alpha_mask = alpha_mask.filter( ImageFilter.GaussianBlur(self.mask_blur_width) )
-			alpha_mask = from_aggdraw_context(alpha_mask)
+			alpha_mask = aggdraw_to_numpy_surface(alpha_mask)
 
 			# render mask
-			mask = from_aggdraw_context(bg)
+			mask = aggdraw_to_numpy_surface(bg)
 			mask.mask(alpha_mask)
 
 		if mask_type == CENTRAL:
@@ -358,11 +359,11 @@ class FigureGroundSearch(klibs.Experiment):
 			alpha_mask = Image.new(RGBA, (bg_size, bg_size), WHITE)
 			ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), BLACK)
 			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width))
-			alpha_mask = from_aggdraw_context(alpha_mask)
+			alpha_mask = aggdraw_to_numpy_surface(alpha_mask)
 
 
 			# render mask
-			mask = from_aggdraw_context(bg)
+			mask = aggdraw_to_numpy_surface(bg)
 			mask.mask(alpha_mask)
 
 		return mask
