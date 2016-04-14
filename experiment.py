@@ -58,6 +58,7 @@ class FigureGroundSearch(klibs.Experiment):
 
 	neutral_color = Params.default_fill_color
 	pseudo_mask = None
+	trial_start_msg = None
 
 	#  trial vars
 	timed_out = False
@@ -69,6 +70,12 @@ class FigureGroundSearch(klibs.Experiment):
 
 	#  debug vars
 	gaze_debug_dot = None
+
+	# dynamic trial vars
+	mask = None
+	mask_label = None
+	figure = None
+	orientation = None
 
 	def __init__(self, *args, **kwargs):
 		super(FigureGroundSearch, self).__init__(*args, **kwargs)
@@ -93,11 +100,11 @@ class FigureGroundSearch(klibs.Experiment):
 
 		padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
 		pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
+		self.trial_start_msg = self.message("Press any key to advance...", 'default', blit=False)
 		self.pseudo_mask = aggdraw_to_numpy_surface(pseudo_mask)
 		self.eyelink.setup()
 
 	def __generate_masks(self):
-		max_mask_px = 0
 		smaller_than_screen = True
 		while smaller_than_screen:
 			self.maximum_mask_size += 1
@@ -105,8 +112,6 @@ class FigureGroundSearch(klibs.Experiment):
 			if new_max_mask_px > Params.screen_y:
 				smaller_than_screen = False
 				self.maximum_mask_size -= 1
-			else:
-				max_mask_px = new_max_mask_px
 		for size in self.trial_factory.exp_parameters[1][1]:
 			if size > self.maximum_mask_size:
 				e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
@@ -116,8 +121,8 @@ class FigureGroundSearch(klibs.Experiment):
 		self.masks = {}
 		for size in self.trial_factory.exp_parameters[1][1]:
 			pump()
-			self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL)
-			self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL)
+			self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL).render()
+			self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL).render()
 
 	def __generate_stimuli(self):
 		self.clear()
@@ -137,12 +142,12 @@ class FigureGroundSearch(klibs.Experiment):
 			stim.mask(figure, (0, 0))
 			fig_text = sl[0][0] if sl[0][0] in (CIRCLE, SQUARE) else "D_%s" % sl[0][1]
 			texture_text = sl[1][0] if sl[1][0] in (CIRCLE, SQUARE) else "D_%s" % sl[1][1]
-			self.stimuli["{0}_{1}".format(fig_text, texture_text)] = stim
+			self.stimuli["{0}_{1}".format(fig_text, texture_text)] = stim.render()
 
 	def __generate_fixations(self):
 		Params.exp_meta_factors['fixation'] = [Params.screen_c,
-											   (Params.screen_c[0], Params.screen_y / 4),
-											   (Params.screen_c[0], 3 * Params.screen_y / 4)]
+											   (Params.screen_c[0], int(Params.screen_y * 0.25)),
+											   (Params.screen_c[0], int(Params.screen_y * 0.75))]
 		dc_box_size = 50
 		# left drift correct box
 		dc_top_tl = (0.5 * Params.screen_x - 0.5 * dc_box_size, Params.screen_y / 4 - 0.5 * dc_box_size )
@@ -162,38 +167,36 @@ class FigureGroundSearch(klibs.Experiment):
 
 	def trial_prep(self, trial_factors):
 		self.clear()
+		# choose randomly varying parts of trial
+		self.orientation = random.choice(self.orientations)
+		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
+
+		# infer which mask & stim to use and retrieve them
+		self.figure = trial_factors[4] if trial_factors[3] == LOCAL else False
+
+		if self.figure:
+			stim_label = "{0}_D_{1}".format(trial_factors[4], self.orientation)
+		else:
+			stim_label = "D_{0}_{1}".format(self.orientation, trial_factors[4])
+		self.figure = self.stimuli[stim_label]
+		self.mask_label = "{0}_{1}".format(trial_factors[1], trial_factors[2])
+		try:
+			self.mask = self.masks[self.mask_label]
+		except KeyError as e:
+			print e, trial_factors
+			self.mask = None  # for the no mask condition, easier than creating empty keys in self.masks
+		self.blit(self.trial_start_msg, 5, Params.screen_c)
+		self.flip()
+		self.any_key()
+		self.drift_correct(self.fixation)
 
 	def trial(self, trial_factors):
 		"""
 		trial_factors: 1 = mask_type, 2 = mask_size, 3 = target_level, 4 = target_shape]
 		"""
-
-
-		# choose randomly varying parts of trial
-		orientation = random.choice(self.orientations)
-		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
-
-		# infer which mask & stim to use and retrieve them
-		figure = trial_factors[4] if trial_factors[3] == LOCAL else False
-		stim_label = None
-		if figure:
-			stim_label = "{0}_D_{1}".format(trial_factors[4], orientation)
-		else:
-			stim_label = "D_{0}_{1}".format(orientation, trial_factors[4])
-		stim = self.stimuli[stim_label]
-		mask_label = "{0}_{1}".format(trial_factors[1], trial_factors[2])
-		try:
-			mask = self.masks[mask_label]
-		except KeyError:
-			mask = None  # for the no mask condition, easier than creating empty keys in self.masks
-
-		# start the trial
-		self.message("Press any key to advance...", color=WHITE, location="center", font_size=48, flip=False)
-		self.listen()
-		self.drift_correct(self.fixation)
 		self.eyelink.start(Params.trial_number)
-		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, stim=stim,
-						   mask=mask, mask_type=trial_factors[1], gaze_boundary=mask_label)
+		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, stim=self.figure,
+						   mask=self.mask, mask_type=trial_factors[1], gaze_boundary=self.mask_label)
 
 		# handle timeouts
 		if resp[0] == TIMEOUT:
@@ -202,7 +205,7 @@ class FigureGroundSearch(klibs.Experiment):
 			self.clear()
 
 		#  create readable data as fixation is currrently in (x,y) coordinates
-		initial_fixation = None
+
 		if self.fixation == Params.fixation_top:
 			initial_fixation = "TOP"
 		elif self.fixation == Params.fixation_central:
@@ -217,7 +220,7 @@ class FigureGroundSearch(klibs.Experiment):
 				"mask_size": trial_factors[2],
 				"local": trial_factors[4] if trial_factors[3] == LOCAL else "D",
 				"global": trial_factors[4] if trial_factors[3] == GLOBAL else "D",
-				"d_orientation": orientation,
+				"d_orientation": self.orientation,
 				"trial_num": Params.trial_number,
 				"block_num": Params.block_number,
 				"initial_fixation": initial_fixation}
@@ -253,7 +256,6 @@ class FigureGroundSearch(klibs.Experiment):
 		#                    v
 
 		element_offset = self.bg_element_pad // 2  # so as to apply padding equally on all sides of bg elements
-		element = None
 		for col in range(0, grid_cell_count):
 			for row in range(0, grid_cell_count):
 				pump()
@@ -276,7 +278,6 @@ class FigureGroundSearch(klibs.Experiment):
 
 					half_el_width = int(0.5 * deg_to_px(self.bg_element_size))
 					rect_right = right_out - half_el_width
-					rect_right_in = right_out - half_el_width - stroke_width
 					ImageDraw.Draw(dc, RGBA, ).ellipse((left_out, top_out, right_out, bottom_out), WHITE)
 					ImageDraw.Draw(dc, RGBA, ).ellipse((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
 					ImageDraw.Draw(dc, RGBA, ).rectangle((left_out, top_out, rect_right, bottom_out), WHITE)
@@ -354,17 +355,14 @@ class FigureGroundSearch(klibs.Experiment):
 			tl = pad // 2
 			br = bg_size - tl
 
-
 			# Create an alpha mask
 			alpha_mask = Image.new(RGBA, (bg_size, bg_size), WHITE)
 			ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), BLACK)
-			alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width))
-			alpha_mask = aggdraw_to_numpy_surface(alpha_mask)
-
+			alpha_mask = aggdraw_to_numpy_surface(alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width)))
 
 			# render mask
 			mask = aggdraw_to_numpy_surface(bg)
-			mask.mask(alpha_mask)
+			mask.mask(alpha_mask, grey_scale=True)
 
 		return mask
 
@@ -379,7 +377,7 @@ class FigureGroundSearch(klibs.Experiment):
 		else:
 			if mask is not None:
 				self.blit(mask, 5, position)
-			if Params.debug_level > 0:
-					self.blit(self.gaze_debug_dot, 5, mouse_pos())
+			if not Params.eye_tracker_available:
+				self.blit(self.gaze_debug_dot, 5, mouse_pos())
 		self.flip()
 
