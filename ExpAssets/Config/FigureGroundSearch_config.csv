@@ -1,4 +1,4 @@
-mask_type.param,mask_size.param,target_level.param,target_shape.param,Trial_Count.param
-central,8,local,square,NA
-peripheral,12,global,circle,NA
-none,16,,,NA
+mask_type.param, mask_size.param, target_level.param, target_shape.param
+central, 8, local, square
+peripheral, 12, global, circle
+none, 16,,,

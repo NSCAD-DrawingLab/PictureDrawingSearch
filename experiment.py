@@ -1,13 +1,11 @@
 __author__ = "EXPERIMENTER_NAME"
 
 import klibs
-from PIL import Image,ImageDraw, ImageFilter
-from klibs import Params
+from PIL import Image, ImageDraw, ImageFilter
 from klibs.KLNumpySurface import *
 from klibs.KLUtilities import *
 import random
 import sdl2
-import copy
 
 
 """
@@ -162,41 +160,40 @@ class FigureGroundSearch(klibs.Experiment):
 		dc_middle_br = (Params.screen_x / 2 + 0.5 * dc_box_size, 0.5 * Params.screen_y + 0.5 * dc_box_size)
 		self.eyelink.add_gaze_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br])
 
-	def block(self, block_num):
+	def block(self):
 		pass
 
-	def trial_prep(self, trial_factors):
+	def trial_prep(self):
 		self.clear()
 		# choose randomly varying parts of trial
 		self.orientation = random.choice(self.orientations)
 		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
 
 		# infer which mask & stim to use and retrieve them
-		self.figure = trial_factors[4] if trial_factors[3] == LOCAL else False
+		self.figure = self.target_shape if self.target_level == LOCAL else False
 
 		if self.figure:
-			stim_label = "{0}_D_{1}".format(trial_factors[4], self.orientation)
+			stim_label = "{0}_D_{1}".format(self.target_shape, self.orientation)
 		else:
-			stim_label = "D_{0}_{1}".format(self.orientation, trial_factors[4])
+			stim_label = "D_{0}_{1}".format(self.orientation, self.target_shape)
 		self.figure = self.stimuli[stim_label]
-		self.mask_label = "{0}_{1}".format(trial_factors[1], trial_factors[2])
+		self.mask_label = "{0}_{1}".format(self.mask_type, self.mask_size)
 		try:
 			self.mask = self.masks[self.mask_label]
 		except KeyError as e:
-			print e, trial_factors
 			self.mask = None  # for the no mask condition, easier than creating empty keys in self.masks
 		self.blit(self.trial_start_msg, 5, Params.screen_c)
 		self.flip()
 		self.any_key()
 		self.drift_correct(self.fixation)
 
-	def trial(self, trial_factors):
+	def trial(self):
 		"""
 		trial_factors: 1 = mask_type, 2 = mask_size, 3 = target_level, 4 = target_shape]
 		"""
 		self.eyelink.start(Params.trial_number)
 		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, stim=self.figure,
-						   mask=self.mask, mask_type=trial_factors[1], gaze_boundary=self.mask_label)
+						   mask=self.mask, mask_type=self.mask_type, gaze_boundary=self.mask_label)
 
 		# handle timeouts
 		if resp[0] == TIMEOUT:
@@ -213,27 +210,25 @@ class FigureGroundSearch(klibs.Experiment):
 		else:
 			initial_fixation = "BOTTOM"
 
-		return {"practicing": trial_factors[0],
+		return {"practicing": Params.practicing,
 				"response": resp[0],
 				"rt": float(resp[1]),
-				"mask_type": trial_factors[1],
-				"mask_size": trial_factors[2],
-				"local": trial_factors[4] if trial_factors[3] == LOCAL else "D",
-				"global": trial_factors[4] if trial_factors[3] == GLOBAL else "D",
+				"mask_type": self.mask_type,
+				"mask_size": self.mask_size,
+				"local": self.target_shape if self.target_level == LOCAL else "D",
+				"global": self.target_shape if self.target_level == GLOBAL else "D",
 				"d_orientation": self.orientation,
 				"trial_num": Params.trial_number,
 				"block_num": Params.block_number,
 				"initial_fixation": initial_fixation}
 
-	def trial_clean_up(self, *args, **kwargs):
+	def trial_clean_up(self):
 		self.fixation = None
 
 	def clean_up(self):
 		pass
 
 	def texture(self, texture_figure, orientation=None):
-
-
 		grid_size = (deg_to_px(self.stim_size) + self.stim_pad) * 2
 		stim_offset = self.stim_pad // 2
 		dc = Image.new(RGBA, (grid_size, grid_size), TRANSPARENT)
