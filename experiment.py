@@ -157,16 +157,16 @@ class FigureGroundSearch(klibs.Experiment):
 											   (P.screen_c[0], int(P.screen_y * 0.75))]
 		dc_box_size = 50
 		# left drift correct box
-		dc_top_tl = (int(0.5 * P.screen_x - 0.5 * dc_box_size), int(P.screen_y / 4 - 0.5 * dc_box_size))
-		dc_top_br = (int(0.5 * P.screen_x + 0.5 * dc_box_size), int(P.screen_y / 4 + 0.5 * dc_box_size))
+		dc_top_tl = (int(0.5 * P.screen_x - 0.5 * dc_box_size), int(0.25 * P.screen_y - 0.5 * dc_box_size))
+		dc_top_br = (int(0.5 * P.screen_x + 0.5 * dc_box_size), int(0.25 * P.screen_y + 0.5 * dc_box_size))
 		self.el.add_boundary('dc_top_box', [dc_top_tl, dc_top_br], RECT_BOUNDARY)
 		# right drift correct box
-		dc_bottom_tl = (int(0.5 * P.screen_y - 0.5 * dc_box_size), int(3 * P.screen_y / 4 - 0.5 * dc_box_size))
-		dc_bottom_br = (int(0.5 * P.screen_y - 0.5 * dc_box_size), int(3 * P.screen_y / 4 + 0.5 * dc_box_size))
+		dc_bottom_tl = (int(0.5 * P.screen_x - 0.5 * dc_box_size), int(0.75 * P.screen_y - 0.5 * dc_box_size))
+		dc_bottom_br = (int(0.5 * P.screen_x + 0.5 * dc_box_size), int(0.75 * P.screen_y + 0.5 * dc_box_size))
 		self.el.add_boundary('dc_bottom_box', [dc_bottom_tl, dc_bottom_br], RECT_BOUNDARY)
 		# middle drift correct box
-		dc_middle_tl = (int(P.screen_x / 2 - 0.5 * dc_box_size), int(0.5 * P.screen_y - 0.5 * dc_box_size))
-		dc_middle_br = (int(P.screen_x / 2 + 0.5 * dc_box_size), int(0.5 * P.screen_y + 0.5 * dc_box_size))
+		dc_middle_tl = (int(0.5 * P.screen_x - 0.5 * dc_box_size), int(0.5 * P.screen_y - 0.5 * dc_box_size))
+		dc_middle_br = (int(0.5 * P.screen_x + 0.5 * dc_box_size), int(0.5 * P.screen_y + 0.5 * dc_box_size))
 		self.el.add_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br], RECT_BOUNDARY)
 
 	def block(self):
@@ -174,7 +174,7 @@ class FigureGroundSearch(klibs.Experiment):
 	
 	def setup_response_collector(self):
 		self.rc.display_callback = self.screen_refresh
-		self.rc.terminate_after = [5, TK_S]
+		self.rc.terminate_after = [self.search_time, TK_S]
 		self.rc.uses([RC_KEYPRESS])
 		self.rc.keypress_listener.interrupts = True
 		self.rc.keypress_listener.key_map = self.keymap
@@ -184,7 +184,7 @@ class FigureGroundSearch(klibs.Experiment):
 		clear()
 		# choose randomly varying parts of trial
 		self.orientation = random.choice(self.orientations)
-		self.fixation = P.screen_c#tuple(random.choice(self.exp_meta_factors['fixation']))
+		self.fixation = tuple(random.choice(self.exp_meta_factors['fixation']))
 		if self.fixation[1] < P.screen_c[1]:
 			self.fixation_bounds = "dc_top_box"
 		elif self.fixation[1] > P.screen_c[1]:
@@ -208,7 +208,7 @@ class FigureGroundSearch(klibs.Experiment):
 		blit(self.trial_start_msg, 5, P.screen_c)
 		flip()
 		any_key()
-		self.el.drift_correct(self.fixation)
+		self.el.drift_correct(self.fixation, self.fixation_bounds)
 
 	def trial(self):
 		"""
