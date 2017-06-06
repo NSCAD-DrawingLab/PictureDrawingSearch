@@ -1,4 +1,0 @@
-mask_type.param, mask_size.param, target_level.param, target_shape.param
-central, 8, local, square
-peripheral, 12, global, circle
-none, 16,,,

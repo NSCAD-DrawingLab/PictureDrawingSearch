@@ -1,15 +1,22 @@
-__author__ = "EXPERIMENTER_NAME"
+__author__ = "Jon Mulle & Austin Hurst"
 
 import klibs
-from PIL import Image, ImageDraw, ImageFilter
-from klibs.KLNumpySurface import *
+from klibs.KLConstants import *
+from klibs import P
 from klibs.KLUtilities import *
+from klibs.KLUserInterface import any_key
+from klibs.KLGraphics import aggdraw_to_numpy_surface, fill, flip, blit, clear
+#from klibs.KLNumpySurface import *
+from klibs.KLCommunication import message, alert
+from klibs.KLKeyMap import KeyMap
+
+from PIL import Image, ImageDraw, ImageFilter
 import random
 import sdl2
 
 
 """
-DEFINITIIONS & SHORTHAND THAT SIMPLY CLEANS UP THE READABILITY OF THE CODE BELOW
+DEFINITIONS & SHORTHAND THAT CLEAN UP THE READABILITY OF THE CODE BELOW
 """
 #  Fixation positions calculated in FigureGroundSearch.__init__() based on current screen dimensions
 
@@ -30,7 +37,7 @@ RED = (255, 0, 0, 80)
 GREEN = (0, 255, 0, 80)
 BLUE = (0, 0, 255, 80)
 DARK_GREY= (45, 45, 45, 255)
-NEUTRAL_COLOR = Params.default_fill_color
+NEUTRAL_COLOR = P.default_fill_color
 TRANSPARENT = (0, 0, 0, 0)
 RGBA = "RGBA"
 
@@ -54,7 +61,7 @@ class FigureGroundSearch(klibs.Experiment):
 	bg_element_pad = 0.6  # degrees of visual angle
 	orientations = [0, 90, 180, 270]
 
-	neutral_color = Params.default_fill_color
+	neutral_color = P.default_fill_color
 	pseudo_mask = None
 	trial_start_msg = None
 
@@ -78,18 +85,20 @@ class FigureGroundSearch(klibs.Experiment):
 	def __init__(self, *args, **kwargs):
 		super(FigureGroundSearch, self).__init__(*args, **kwargs)
 
-		Params.fixation_top = (Params.screen_x // 2, Params.screen_y // 4)
-		Params.fixation_central = Params.screen_c
-		Params.fixation_bottom = (Params.screen_x // 2, 3 * Params.screen_y // 4)
-
 	def setup(self):
-		self.text_manager.add_style('q_and_a', 48, WHITE)
+        
+		self.fixation_top = (P.screen_x // 2, P.screen_y // 4)
+		self.fixation_central = P.screen_c
+		self.fixation_bottom = (P.screen_x // 2, 3 * P.screen_y // 4)
+		self.exp_meta_factors = {"fixation": [self.fixation_top, self.fixation_central, self.fixation_bottom]}
+        
+		self.txtm.add_style('q_and_a', 48, WHITE)
 		self.stim_pad = deg_to_px(self.stim_pad)
 		self.__generate_masks()
 		self.__generate_stimuli()
 		self.__generate_fixations()
 
-		Params.key_maps[SEARCH_RESPONSE_KEYS] = klibs.KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
+		self.keymap = KeyMap(SEARCH_RESPONSE_KEYS, ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
 
 		# debugging dot for gaze coordinates
 		gaze_debug_dot = Image.new(RGBA, (5, 5), TRANSPARENT)
@@ -98,33 +107,33 @@ class FigureGroundSearch(klibs.Experiment):
 
 		padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
 		pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
-		self.trial_start_msg = self.message("Press any key to advance...", 'default', blit=False)
+		self.trial_start_msg = message("Press any key to advance...", 'default', blit_txt=False)
 		self.pseudo_mask = aggdraw_to_numpy_surface(pseudo_mask)
-		self.eyelink.setup()
+		self.el.setup()
 
 	def __generate_masks(self):
 		smaller_than_screen = True
 		while smaller_than_screen:
 			self.maximum_mask_size += 1
 			new_max_mask_px = deg_to_px(self.maximum_mask_size) + deg_to_px(self.stim_size) // 2 + self.stim_pad // 2
-			if new_max_mask_px > Params.screen_y:
+			if new_max_mask_px > P.screen_y:
 				smaller_than_screen = False
 				self.maximum_mask_size -= 1
-		for size in self.trial_factory.exp_parameters[1][1]:
+		for size in self.trial_factory.exp_factors[2][1]:
 			if size > self.maximum_mask_size:
 				e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
 				raise ValueError(e_str)
-		self.clear()
-		self.message("Rendering masks...", "q_and_a", location=Params.screen_c, registration=5, flip=True)
+		clear()
+		message("Rendering masks...", "q_and_a", location=P.screen_c, registration=5, flip_screen=True)
 		self.masks = {}
-		for size in self.trial_factory.exp_parameters[1][1]:
+		for size in self.trial_factory.exp_factors[2][1]:
 			pump()
 			self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL).render()
 			self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL).render()
 
 	def __generate_stimuli(self):
-		self.clear()
-		self.message("Generating stimuli...","q_and_a", location=Params.screen_c, registration=5, flip=True)
+		clear()
+		message("Generating stimuli...","q_and_a", location=P.screen_c, registration=5, flip_screen=True)
 		stimuli_labels = [[(False, 0), (CIRCLE, 0)], [(False, 90), (CIRCLE, 0)], [(False, 180), (CIRCLE, 0)],
 						  [(False, 270), (CIRCLE, 0)],
 						  [(False, 0), (SQUARE, 0)], [(False, 90), (SQUARE, 0)], [(False, 180), (SQUARE, 0)],
@@ -143,31 +152,45 @@ class FigureGroundSearch(klibs.Experiment):
 			self.stimuli["{0}_{1}".format(fig_text, texture_text)] = stim.render()
 
 	def __generate_fixations(self):
-		Params.exp_meta_factors['fixation'] = [Params.screen_c,
-											   (Params.screen_c[0], int(Params.screen_y * 0.25)),
-											   (Params.screen_c[0], int(Params.screen_y * 0.75))]
+		self.exp_meta_factors['fixation'] = [P.screen_c,
+											   (P.screen_c[0], int(P.screen_y * 0.25)),
+											   (P.screen_c[0], int(P.screen_y * 0.75))]
 		dc_box_size = 50
 		# left drift correct box
-		dc_top_tl = (0.5 * Params.screen_x - 0.5 * dc_box_size, Params.screen_y / 4 - 0.5 * dc_box_size )
-		dc_top_br = (0.5 * Params.screen_x + 0.5 * dc_box_size, Params.screen_y / 4 + 0.5 * dc_box_size)
-		self.eyelink.add_gaze_boundary('dc_top_box', [dc_top_tl, dc_top_br])
+		dc_top_tl = (int(0.5 * P.screen_x - 0.5 * dc_box_size), int(P.screen_y / 4 - 0.5 * dc_box_size))
+		dc_top_br = (int(0.5 * P.screen_x + 0.5 * dc_box_size), int(P.screen_y / 4 + 0.5 * dc_box_size))
+		self.el.add_boundary('dc_top_box', [dc_top_tl, dc_top_br], RECT_BOUNDARY)
 		# right drift correct box
-		dc_bottom_tl = ( 0.5 * Params.screen_y - 0.5 * dc_box_size, 3 * Params.screen_y / 4 - 0.5 * dc_box_size )
-		dc_bottom_br = ( 0.5 * Params.screen_y - 0.5 * dc_box_size, 3 * Params.screen_y / 4 + 0.5 * dc_box_size )
-		self.eyelink.add_gaze_boundary('dc_bottom_box', [dc_bottom_tl, dc_bottom_br])
+		dc_bottom_tl = (int(0.5 * P.screen_y - 0.5 * dc_box_size), int(3 * P.screen_y / 4 - 0.5 * dc_box_size))
+		dc_bottom_br = (int(0.5 * P.screen_y - 0.5 * dc_box_size), int(3 * P.screen_y / 4 + 0.5 * dc_box_size))
+		self.el.add_boundary('dc_bottom_box', [dc_bottom_tl, dc_bottom_br], RECT_BOUNDARY)
 		# middle drift correct box
-		dc_middle_tl = (Params.screen_x / 2 - 0.5 * dc_box_size, 0.5 * Params.screen_y - 0.5 * dc_box_size)
-		dc_middle_br = (Params.screen_x / 2 + 0.5 * dc_box_size, 0.5 * Params.screen_y + 0.5 * dc_box_size)
-		self.eyelink.add_gaze_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br])
+		dc_middle_tl = (int(P.screen_x / 2 - 0.5 * dc_box_size), int(0.5 * P.screen_y - 0.5 * dc_box_size))
+		dc_middle_br = (int(P.screen_x / 2 + 0.5 * dc_box_size), int(0.5 * P.screen_y + 0.5 * dc_box_size))
+		self.el.add_boundary('dc_middle_box', [dc_middle_tl, dc_middle_br], RECT_BOUNDARY)
 
 	def block(self):
 		pass
-
+	
+	def setup_response_collector(self):
+		self.rc.display_callback = self.screen_refresh
+		self.rc.terminate_after = [5, TK_S]
+		self.rc.uses([RC_KEYPRESS])
+		self.rc.keypress_listener.interrupts = True
+		self.rc.keypress_listener.key_map = self.keymap
+		self.rc.flip = False # Disable flipping on each rc loop, since callback already flips
+	
 	def trial_prep(self):
-		self.clear()
+		clear()
 		# choose randomly varying parts of trial
 		self.orientation = random.choice(self.orientations)
-		self.fixation = tuple(random.choice(Params.exp_meta_factors['fixation']))
+		self.fixation = P.screen_c#tuple(random.choice(self.exp_meta_factors['fixation']))
+		if self.fixation[1] < P.screen_c[1]:
+			self.fixation_bounds = "dc_top_box"
+		elif self.fixation[1] > P.screen_c[1]:
+			self.fixation_bounds = "dc_bottom_box"
+		else:
+			self.fixation_bounds = "dc_middle_box"
 
 		# infer which mask & stim to use and retrieve them
 		self.figure = self.target_shape if self.target_level == LOCAL else False
@@ -182,35 +205,37 @@ class FigureGroundSearch(klibs.Experiment):
 			self.mask = self.masks[self.mask_label]
 		except KeyError as e:
 			self.mask = None  # for the no mask condition, easier than creating empty keys in self.masks
-		self.blit(self.trial_start_msg, 5, Params.screen_c)
-		self.flip()
-		self.any_key()
-		self.drift_correct(self.fixation)
+		blit(self.trial_start_msg, 5, P.screen_c)
+		flip()
+		any_key()
+		self.el.drift_correct(self.fixation)
 
 	def trial(self):
 		"""
 		trial_factors: 1 = mask_type, 2 = mask_size, 3 = target_level, 4 = target_shape]
 		"""
-		self.eyelink.start(Params.trial_number)
-		resp = self.listen(self.search_time, SEARCH_RESPONSE_KEYS, wait_callback=self.screen_refresh, stim=self.figure,
-						   mask=self.mask, mask_type=self.mask_type, gaze_boundary=self.mask_label)
+
+		print(self.mask_type, self.target_level, self.mask_size, self.target_shape)
+		self.rc.collect()
+		resp = self.rc.keypress_listener.response()
+		print(resp)
 
 		# handle timeouts
 		if resp[0] == TIMEOUT:
-			self.clear()
-			self.alert("Too slow!", False, 1)
-			self.clear()
+			clear()
+			alert("Too slow!", False, 1)
+			clear()
 
 		#  create readable data as fixation is currrently in (x,y) coordinates
 
-		if self.fixation == Params.fixation_top:
+		if self.fixation == self.fixation_top:
 			initial_fixation = "TOP"
-		elif self.fixation == Params.fixation_central:
+		elif self.fixation == self.fixation_central:
 			initial_fixation = "CENTRAL"
 		else:
 			initial_fixation = "BOTTOM"
 
-		return {"practicing": Params.practicing,
+		return {"practicing": P.practicing,
 				"response": resp[0],
 				"rt": float(resp[1]),
 				"mask_type": self.mask_type,
@@ -218,8 +243,8 @@ class FigureGroundSearch(klibs.Experiment):
 				"local": self.target_shape if self.target_level == LOCAL else "D",
 				"global": self.target_shape if self.target_level == GLOBAL else "D",
 				"d_orientation": self.orientation,
-				"trial_num": Params.trial_number,
-				"block_num": Params.block_number,
+				"trial_num": P.trial_number,
+				"block_num": P.block_number,
 				"initial_fixation": initial_fixation}
 
 	def trial_clean_up(self):
@@ -321,9 +346,9 @@ class FigureGroundSearch(klibs.Experiment):
 			# 	Minimize the size of the peripheral mask by simply painting the screen a neutral color any time
 			# 	the peripheral mask would only be revealing a neutral color.
 			r = diameter // 2 + stim_size // 2
-			scx =  Params.screen_c[0]
-			scy =  Params.screen_c[1]
-			self.eyelink.add_gaze_boundary("{0}_{1}".format(mask_type, diameter_deg), [(scx - r, scy - r), (scx + r, scy + r)])
+			scx =  P.screen_c[0]
+			scy =  P.screen_c[1]
+			self.el.add_boundary("{0}_{1}".format(mask_type, diameter_deg), [(scx - r, scy - r), (scx + r, scy + r)], RECT_BOUNDARY)
 
 
 			# Create solid background
@@ -361,18 +386,18 @@ class FigureGroundSearch(klibs.Experiment):
 
 		return mask
 
-	def screen_refresh(self, stim, mask, mask_type, gaze_boundary=False):
-		position = self.eyelink.gaze()
-		self.fill()
-		self.blit(stim, 5, 'center')
-		if mask_type == PERIPHERAL and not self.eyelink.within_boundary(gaze_boundary, position):
-			self.clear()
+	def screen_refresh(self):
+		position = self.el.gaze()
+		fill()
+		blit(self.figure, 5, P.screen_c)
+		if self.mask_type == PERIPHERAL and not self.el.within_boundary(self.mask_label, EL_GAZE_POS):
+			clear()
 		elif not position:
-			self.clear()
+			clear()
 		else:
-			if mask is not None:
-				self.blit(mask, 5, position)
-			if not Params.eye_tracker_available:
-				self.blit(self.gaze_debug_dot, 5, mouse_pos())
-		self.flip()
+			if self.mask is not None:
+				blit(self.mask, 5, position)
+			#if not P.eye_tracker_available:
+			#	blit(self.gaze_debug_dot, 5, mouse_pos())
+		flip()
 
