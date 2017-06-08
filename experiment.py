@@ -20,7 +20,6 @@ import time
 """
 DEFINITIONS & SHORTHAND THAT CLEAN UP THE READABILITY OF THE CODE BELOW
 """
-#  Fixation positions calculated in PictureDrawingSearch.__init__() based on current screen dimensions
 
 CENTRAL    = "central"
 PERIPHERAL = "peripheral"
@@ -38,33 +37,26 @@ The experiment itself is actually *run* at the end of this document, after it's 
 """
 
 class PictureDrawingSearch(klibs.Experiment):
-    stim_size = 12  # degrees of visual angle
-    stim_pad = 0.8 # degrees of visual angle
-    mask_blur_width = 10  # pixels
+    mask_blur_width = 4  # pixels
     maximum_mask_size = 0  # automatically set at run time, do not change
     search_time = 120  # seconds
-    fixation = None  # chosen randomly each trial
-
-    #  trial vars
-    timed_out = False
 
     masks = {}
 
     # dynamic trial vars
     mask = None
     mask_label = None
+    fixation = None
 
     def __init__(self, *args, **kwargs):
         super(PictureDrawingSearch, self).__init__(*args, **kwargs)
 
     def setup(self):
         
-        # Stimulus sizes
+        # Generate text and display loading screen
         
-        self.stim_pad = deg_to_px(self.stim_pad)
         self.txtm.add_style('q_and_a', 48, WHITE)
-        
-        # Display loading screen as images and masks are loaded
+        self.trial_start_msg = message("Press any key to advance...", 'default', blit_txt=False)
         
         fill()
         message("Loading...", "q_and_a", location=P.screen_c, registration=5)
@@ -85,18 +77,18 @@ class PictureDrawingSearch(klibs.Experiment):
                 img = ns(os.path.join(img_dir, img_name))
                 self.images.append([img_name, img.render()])
         
-        # Generate masks, stimuli, and fixations for the experiment
+        # Generate masks for the experiment
         
         self.__generate_masks()
-        self.__generate_fixations()
         
-        self.trial_start_msg = message("Press any key to advance...", 'default', blit_txt=False)
+        self.el.setup()
+        
 
     def __generate_masks(self):
         smaller_than_screen = True
         while smaller_than_screen:
             self.maximum_mask_size += 1
-            new_max_mask_px = deg_to_px(self.maximum_mask_size) + deg_to_px(self.stim_size) // 2 + self.stim_pad // 2
+            new_max_mask_px = deg_to_px(self.maximum_mask_size) + self.mask_blur_width * 4 + 2
             if new_max_mask_px > P.screen_y:
                 smaller_than_screen = False
                 self.maximum_mask_size -= 1
@@ -111,30 +103,6 @@ class PictureDrawingSearch(klibs.Experiment):
             self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL).render()
             self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL).render()
 
-    def __generate_fixations(self):
-        
-        # Locations
-        self.fixation_top     = (P.screen_x / 2,  1 * P.screen_y / 4)
-        self.fixation_central = (P.screen_x / 2,  2 * P.screen_y / 4)
-        self.fixation_bottom  = (P.screen_x / 2,  3 * P.screen_y / 4)
-        self.exp_meta_factors = {"fixation": [self.fixation_top, self.fixation_central, self.fixation_bottom]}
-        
-        dc_box_size = 50 # Size of drift correct bounds in pixels
-        dc_bounds   = dc_box_size / 2
-        
-        # top drift correct box
-        dc_top_tl     = (self.fixation_top[0] - dc_bounds, self.fixation_top[1] - dc_bounds)
-        dc_top_br     = (self.fixation_top[0] + dc_bounds, self.fixation_top[1] + dc_bounds)
-        self.el.add_boundary('dc_top_box', [dc_top_tl, dc_top_br], RECT_BOUNDARY)
-        # central drift correct box
-        dc_central_tl = (self.fixation_central[0] - dc_bounds, self.fixation_central[1] - dc_bounds)
-        dc_central_br = (self.fixation_central[0] + dc_bounds, self.fixation_central[1] + dc_bounds)
-        self.el.add_boundary('dc_central_box', [dc_central_tl, dc_central_br], RECT_BOUNDARY)
-        # bottom drift correct box
-        dc_bottom_tl  = (self.fixation_bottom[0] - dc_bounds, self.fixation_bottom[1] - dc_bounds)
-        dc_bottom_br  = (self.fixation_bottom[0] + dc_bounds, self.fixation_bottom[1] + dc_bounds)
-        self.el.add_boundary('dc_bottom_box', [dc_bottom_tl, dc_bottom_br], RECT_BOUNDARY)
-
     def block(self):
         pass
     
@@ -147,19 +115,10 @@ class PictureDrawingSearch(klibs.Experiment):
         self.rc.flip = False # Disable flipping on each rc loop, since callback already flips
     
     def trial_prep(self):
+        # Clear the screen of stimuli before the trial start
         clear()
-        # choose randomly varying parts of trial
         
-        self.fixation = tuple(random.choice(self.exp_meta_factors['fixation']))
-        if self.fixation[1] < P.screen_c[1]:
-            self.fixation_bounds = "dc_top_box"
-        elif self.fixation[1] > P.screen_c[1]:
-            self.fixation_bounds = "dc_bottom_box"
-        else:
-            self.fixation_bounds = "dc_central_box"
-            
         # Determine image and image name for trial
-        
         self.arrangement = random.choice(self.images)
 
         # infer which mask to use and retrieve it
@@ -167,16 +126,16 @@ class PictureDrawingSearch(klibs.Experiment):
         try:
             self.mask = self.masks[self.mask_label]
         except KeyError as e:
-            self.mask = None  # for the no mask condition, easier than creating empty keys in self.masks
+            self.mask = None
+        
+        # Display trial start message and perform drift correct after keypress
         blit(self.trial_start_msg, 5, P.screen_c)
         flip()
         any_key()
-        self.el.drift_correct(self.fixation, self.fixation_bounds)
+        self.el.drift_correct()
 
     def trial(self):
-        """
-        trial_factors: 1 = mask_type, 2 = mask_size
-        """
+
         if P.development_mode:
             print(self.mask_type, self.mask_size)
         
@@ -184,29 +143,18 @@ class PictureDrawingSearch(klibs.Experiment):
         resp = self.rc.keypress_listener.response()
         
         if P.development_mode:
-            print(resp)
-
-        #  create readable data as fixation is currrently in (x,y) coordinates
-
-        if self.fixation == self.fixation_top:
-            initial_fixation = "TOP"
-        elif self.fixation == self.fixation_central:
-            initial_fixation = "CENTRAL"
-        else:
-            initial_fixation = "BOTTOM"
+            print(resp)     
 
         return {"trial_num":  P.trial_number,
                 "block_num":  P.block_number,
-                "practicing": P.practicing,
                 "image":      self.arrangement[0],
                 "mask_type":  self.mask_type,
                 "mask_size":  self.mask_size,
                 "response":   resp[0],
-                "rt":         float(resp[1]),
-                "init_fix":   initial_fixation}
+                "rt":         float(resp[1])}
 
     def trial_clean_up(self):
-        self.fixation = None
+        pass
 
     def clean_up(self):
         pass

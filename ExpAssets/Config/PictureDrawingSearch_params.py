@@ -57,7 +57,7 @@ manual_demographics_collection = False
 practicing = False
 trials_per_block = 24
 trials_per_practice_block = 0
-blocks_per_experiment = 6
+blocks_per_experiment = 1
 practice_blocks_per_experiment = 0
 trials_per_participant = 0
 table_defaults = {}
@@ -100,8 +100,3 @@ demographic_questions = [
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
-#fixation_top = [None, None]
-#fixation_central = [None, None]
-#fixation_bottom = [None, None]
-#exp_meta_factors = {"fixation": [fixation_top, fixation_central, fixation_bottom]}
-
