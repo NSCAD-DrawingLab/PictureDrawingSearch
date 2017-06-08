@@ -33,12 +33,10 @@ CREATE TABLE trials (
 	block_num integer not null,
 	trial_num integer not null,
 	practicing text not null,
+    image text not null,
 	mask_type text not null,
-  mask_size text not null,
-	"global" text not null,
-	"local" text not null,
-	d_orientation text not null,
+    mask_size text not null,
 	rt real not null, -- reaction time
-  response text not null,
-  initial_fixation text not null
+    response text not null,
+    init_fix text not null
 );

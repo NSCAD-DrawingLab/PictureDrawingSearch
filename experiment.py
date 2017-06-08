@@ -5,10 +5,12 @@ from klibs.KLConstants import *
 from klibs import P
 from klibs.KLUtilities import *
 from klibs.KLUserInterface import any_key
+from klibs.KLGraphics.KLNumpySurface import NumpySurface as ns
 from klibs.KLGraphics import aggdraw_to_numpy_surface, fill, flip, blit, clear
 from klibs.KLCommunication import message, alert
 from klibs.KLKeyMap import KeyMap
 
+import os
 from PIL import Image, ImageDraw, ImageFilter
 import random
 import sdl2
@@ -17,17 +19,7 @@ import sdl2
 """
 DEFINITIONS & SHORTHAND THAT CLEAN UP THE READABILITY OF THE CODE BELOW
 """
-#  Fixation positions calculated in FigureGroundSearch.__init__() based on current screen dimensions
-
-CIRCLE = "circle"
-SQUARE = "square"
-LOCAL  = "local"
-GLOBAL = "global"
-
-OR_UP    = "ROTATED_0_DEG"
-OR_RIGHT = "ROTATED_90_DEG"
-OR_DOWN  = "ROTATED_180_DEG"
-OR_LEFT  = "ROTATED_270_DEG"
+#  Fixation positions calculated in PictureDrawingSearch.__init__() based on current screen dimensions
 
 CENTRAL    = "central"
 PERIPHERAL = "peripheral"
@@ -47,7 +39,7 @@ This code defines a  class that 'extends' the basic KLExperiment class.
 The experiment itself is actually *run* at the end of this document, after it's been defined.
 """
 
-class FigureGroundSearch(klibs.Experiment):
+class PictureDrawingSearch(klibs.Experiment):
     stim_size = 12  # degrees of visual angle
     stim_pad = 0.8 # degrees of visual angle
     mask_blur_width = 4  # pixels
@@ -56,7 +48,6 @@ class FigureGroundSearch(klibs.Experiment):
     fixation = None  # chosen randomly each trial
     bg_element_size = 0.8  # degrees of visual angle
     bg_element_pad = 0.6  # degrees of visual angle
-    orientations = [0, 90, 180, 270]
 
     neutral_color = P.default_fill_color
     pseudo_mask = None
@@ -65,19 +56,14 @@ class FigureGroundSearch(klibs.Experiment):
     #  trial vars
     timed_out = False
 
-    textures = {}
-    figures = {}
-    stimuli = {}
     masks = {}
 
     # dynamic trial vars
     mask = None
     mask_label = None
-    figure = None
-    orientation = None
 
     def __init__(self, *args, **kwargs):
-        super(FigureGroundSearch, self).__init__(*args, **kwargs)
+        super(PictureDrawingSearch, self).__init__(*args, **kwargs)
 
     def setup(self):
         
@@ -91,10 +77,20 @@ class FigureGroundSearch(klibs.Experiment):
         
         self.keymap = KeyMap("FGSearch_response", ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
         
+        # Load in images
+        
+        img_dir = os.path.join(P.image_dir, "arrangements")
+        img_names = next(os.walk(img_dir))[2]
+        
+        self.images = []
+        for img_name in img_names:
+            if not img_name.startswith('.'):
+                img = ns(os.path.join(img_dir, img_name))
+                self.images.append([img_name, img.render()])
+        
         # Generate masks, stimuli, and fixations for the experiment
         
         self.__generate_masks()
-        self.__generate_stimuli()
         self.__generate_fixations()
 
         pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
@@ -120,26 +116,6 @@ class FigureGroundSearch(klibs.Experiment):
             pump()
             self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL).render()
             self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL).render()
-
-    def __generate_stimuli(self):
-        clear()
-        message("Generating stimuli...","q_and_a", location=P.screen_c, registration=5, flip_screen=True)
-        stimuli_labels = [[(False, 0), (CIRCLE, 0)], [(False, 90), (CIRCLE, 0)], [(False, 180), (CIRCLE, 0)],
-                          [(False, 270), (CIRCLE, 0)],
-                          [(False, 0), (SQUARE, 0)], [(False, 90), (SQUARE, 0)], [(False, 180), (SQUARE, 0)],
-                          [(False, 270), (SQUARE, 0)],
-                          [(CIRCLE, 0), (False, 0)], [(CIRCLE, 0), (False, 90)], [(CIRCLE, 0), (False, 180)],
-                          [(CIRCLE, 0), (False, 270)],
-                          [(SQUARE, 0), (False, 0)], [(SQUARE, 0), (False, 90)], [(SQUARE, 0), (False, 180)],
-                          [(SQUARE, 0), (False, 270)]]
-
-        for sl in stimuli_labels:
-            stim = self.texture(sl[1][0], sl[1][1])
-            figure = self.figure(sl[0][0], sl[0][1])
-            stim.mask(figure, (0, 0))
-            fig_text = sl[0][0] if sl[0][0] in (CIRCLE, SQUARE) else "D_%s" % sl[0][1]
-            texture_text = sl[1][0] if sl[1][0] in (CIRCLE, SQUARE) else "D_%s" % sl[1][1]
-            self.stimuli["{0}_{1}".format(fig_text, texture_text)] = stim.render()
 
     def __generate_fixations(self):
         
@@ -179,7 +155,7 @@ class FigureGroundSearch(klibs.Experiment):
     def trial_prep(self):
         clear()
         # choose randomly varying parts of trial
-        self.orientation = random.choice(self.orientations)
+        
         self.fixation = tuple(random.choice(self.exp_meta_factors['fixation']))
         if self.fixation[1] < P.screen_c[1]:
             self.fixation_bounds = "dc_top_box"
@@ -187,15 +163,12 @@ class FigureGroundSearch(klibs.Experiment):
             self.fixation_bounds = "dc_bottom_box"
         else:
             self.fixation_bounds = "dc_central_box"
+            
+        # Determine image and image name for trial
+        
+        self.arrangement = random.choice(self.images)
 
-        # infer which mask & stim to use and retrieve them
-        self.figure = self.target_shape if self.target_level == LOCAL else False
-
-        if self.figure:
-            stim_label = "{0}_D_{1}".format(self.target_shape, self.orientation)
-        else:
-            stim_label = "D_{0}_{1}".format(self.orientation, self.target_shape)
-        self.figure = self.stimuli[stim_label]
+        # infer which mask to use and retrieve it
         self.mask_label = "{0}_{1}".format(self.mask_type, self.mask_size)
         try:
             self.mask = self.masks[self.mask_label]
@@ -234,104 +207,22 @@ class FigureGroundSearch(klibs.Experiment):
         else:
             initial_fixation = "BOTTOM"
 
-        return {"practicing": P.practicing,
-                "response": resp[0],
-                "rt": float(resp[1]),
-                "mask_type": self.mask_type,
-                "mask_size": self.mask_size,
-                "local": self.target_shape if self.target_level == LOCAL else "D",
-                "global": self.target_shape if self.target_level == GLOBAL else "D",
-                "d_orientation": self.orientation,
-                "trial_num": P.trial_number,
-                "block_num": P.block_number,
-                "initial_fixation": initial_fixation}
+        return {"trial_num":  P.trial_number,
+                "block_num":  P.block_number,
+                "practicing": P.practicing,
+                "image":      self.arrangement[0],
+                "mask_type":  self.mask_type,
+                "mask_size":  self.mask_size,
+                "response":   resp[0],
+                "rt":         float(resp[1]),
+                "init_fix":   initial_fixation}
 
     def trial_clean_up(self):
         self.fixation = None
 
     def clean_up(self):
         pass
-
-    def texture(self, texture_figure, orientation=None):
-        grid_size = (deg_to_px(self.stim_size) + self.stim_pad) * 2
-        stim_offset = self.stim_pad // 2
-        dc = Image.new(RGBA, (grid_size, grid_size), TRANSPARENT)
-        stroke_width = 2  #px
-        grid_cell_size = deg_to_px(self.bg_element_size + self.bg_element_pad)
-        grid_cell_count = grid_size // grid_cell_size
-        stim_offset += (grid_size % grid_cell_size) // 2  # split grid_size %% cells over pad
-
-
-        # Visual Representation of the Texture Rendering Logic
-        # <-------G-------->
-        #  _______________   ^
-        # |       O       |  |    O = element_offset, ie. 1/2 bg_element_padding
-        # |     _____     |  |    E = element (ie. circle, square, D, etc.)
-        # |    |     |    |  |    G = one grid length
-        # | O  |  E  |  O |  G
-        # |    |_____|    |  |
-        # |               |  |
-        # |_______O_______|  |
-        #                    v
-
-        element_offset = self.bg_element_pad // 2  # so as to apply padding equally on all sides of bg elements
-        for col in range(0, grid_cell_count):
-            for row in range(0, grid_cell_count):
-                pump()
-                top_out = int(row * grid_cell_size + element_offset + stim_offset)
-                top_in = top_out + stroke_width  # ie. top_inner
-                left_out = int(col * grid_cell_size + element_offset + stim_offset)
-                left_in = left_out+ stroke_width
-                bottom_out = int(top_out + deg_to_px(self.bg_element_size))
-                bottom_in = bottom_out - stroke_width
-                right_out = int(left_out + deg_to_px(self.bg_element_size))
-                right_in = right_out - stroke_width
-
-                if texture_figure == CIRCLE:
-                    ImageDraw.Draw(dc, RGBA).ellipse((left_out, top_out, right_out, bottom_out), WHITE)
-                    ImageDraw.Draw(dc, RGBA).ellipse((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
-                elif texture_figure == SQUARE:
-                    ImageDraw.Draw(dc, RGBA).rectangle((left_out, top_out, right_out, bottom_out), WHITE)
-                    ImageDraw.Draw(dc, RGBA).rectangle((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
-                elif texture_figure is False:
-
-                    half_el_width = int(0.5 * deg_to_px(self.bg_element_size))
-                    rect_right = right_out - half_el_width
-                    ImageDraw.Draw(dc, RGBA, ).ellipse((left_out, top_out, right_out, bottom_out), WHITE)
-                    ImageDraw.Draw(dc, RGBA, ).ellipse((left_in, top_in, right_in, bottom_in), NEUTRAL_COLOR)
-                    ImageDraw.Draw(dc, RGBA, ).rectangle((left_out, top_out, rect_right, bottom_out), WHITE)
-                    ImageDraw.Draw(dc, RGBA, ).rectangle((left_in, top_in, rect_right, bottom_in), NEUTRAL_COLOR)
-        dc = dc.resize((grid_size // 2, grid_size // 2), Image.ANTIALIAS)
-        dc = dc.rotate(orientation)
-
-        return aggdraw_to_numpy_surface(dc)
-
-    def figure(self, figure_shape, orientation):
-
-        stim_size_px = deg_to_px(self.stim_size)
-        half_pad = self.stim_pad
-        pad = 2 * self.stim_pad
-        tl_fig = pad
-        br_fig = 2 * stim_size_px
-        rect_right = br_fig - stim_size_px
-        dc_size = (stim_size_px + half_pad) * 2
-        dc = Image.new(RGBA,  (dc_size, dc_size), TRANSPARENT)
-
-        if figure_shape == CIRCLE:
-            ImageDraw.Draw(dc, RGBA).ellipse((tl_fig, tl_fig, br_fig, br_fig), WHITE)
-        if figure_shape == SQUARE:
-            ImageDraw.Draw(dc, RGBA).rectangle((tl_fig, tl_fig, br_fig, br_fig), WHITE)
-        if figure_shape is False:
-            ImageDraw.Draw(dc, RGBA).ellipse((tl_fig, tl_fig, br_fig, br_fig), WHITE)
-            ImageDraw.Draw(dc, RGBA).rectangle((tl_fig, tl_fig, rect_right, br_fig), WHITE)
-        if orientation > 0: dc = dc.rotate(orientation)
-        cookie_cutter = aggdraw_to_numpy_surface(dc.resize((dc_size // 2, dc_size // 2), Image.ANTIALIAS))
-        dough = Image.new(RGBA,  (dc_size // 2, dc_size // 2), WHITE)
-        ImageDraw.Draw(dough, RGBA).rectangle((0, 0, dc_size // 2, dc_size // 2), WHITE)
-        dough = aggdraw_to_numpy_surface(dough)
-        dough.mask(cookie_cutter, (0, 0))
-
-        return dough
+        
 
     def mask(self, diameter, mask_type):
         MASK_COLOR = NEUTRAL_COLOR
@@ -362,6 +253,7 @@ class FigureGroundSearch(klibs.Experiment):
             ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), WHITE, MASK_COLOR)
             alpha_mask = alpha_mask.filter( ImageFilter.GaussianBlur(self.mask_blur_width) )
             alpha_mask = aggdraw_to_numpy_surface(alpha_mask)
+            print(bg_size, tl, br)
 
             # render mask
             mask = aggdraw_to_numpy_surface(bg)
@@ -388,7 +280,7 @@ class FigureGroundSearch(klibs.Experiment):
     def screen_refresh(self):
         position = self.el.gaze()
         fill()
-        blit(self.figure, 5, P.screen_c)
+        blit(self.arrangement[1], 5, P.screen_c)
         if self.mask_type == PERIPHERAL and not self.el.within_boundary(self.mask_label, EL_GAZE_POS):
             clear()
         elif not position:
