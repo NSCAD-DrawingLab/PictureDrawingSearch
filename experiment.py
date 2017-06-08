@@ -14,6 +14,7 @@ import os
 from PIL import Image, ImageDraw, ImageFilter
 import random
 import sdl2
+import time
 
 
 """
@@ -28,7 +29,6 @@ BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
 NEUTRAL_COLOR = P.default_fill_color
 TRANSPARENT = (0, 0, 0, 0)
-RGBA = "RGBA"
 
 """
 EXPERIMENT FACTORS & 'METAFACTORS' (ie. between-block variations as against between-trial)
@@ -73,6 +73,12 @@ class PictureDrawingSearch(klibs.Experiment):
         padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
         self.txtm.add_style('q_and_a', 48, WHITE)
         
+        # Display loading screen as images and masks are loaded
+        
+        fill()
+        message("Loading...", "q_and_a", location=P.screen_c, registration=5)
+        flip()
+        
         # Initialize keymap for recording responses
         
         self.keymap = KeyMap("FGSearch_response", ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
@@ -92,9 +98,7 @@ class PictureDrawingSearch(klibs.Experiment):
         
         self.__generate_masks()
         self.__generate_fixations()
-
-        pseudo_mask = Image.new(RGBA, (padded_stim_size_px, padded_stim_size_px), NEUTRAL_COLOR)
-        self.pseudo_mask = aggdraw_to_numpy_surface(pseudo_mask)
+        
         self.trial_start_msg = message("Press any key to advance...", 'default', blit_txt=False)
 
     def __generate_masks(self):
@@ -109,8 +113,7 @@ class PictureDrawingSearch(klibs.Experiment):
             if size > self.maximum_mask_size:
                 e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
                 raise ValueError(e_str)
-        clear()
-        message("Rendering masks...", "q_and_a", location=P.screen_c, registration=5, flip_screen=True)
+                
         self.masks = {}
         for size in self.trial_factory.exp_factors[2][1]:
             pump()
@@ -229,61 +232,54 @@ class PictureDrawingSearch(klibs.Experiment):
         diameter_deg = diameter
         diameter = deg_to_px(diameter)
         stim_size = deg_to_px(self.stim_size)
-        pad =  self.stim_pad  # note, just borrowing this padding value, it's use is not related to the stimuli at all
-
+        pad =  self.stim_pad  # note, just borrowing this padding value, its use is not related to the stimuli at all
+        start_create = time.time()
+        
         if mask_type == PERIPHERAL:
-            # Create maskable space hack:
-            #   Minimize the size of the peripheral mask by simply painting the screen a neutral color any time
-            #   the peripheral mask would only be revealing a neutral color.
-            r = diameter // 2 + stim_size // 2
-            scx =  P.screen_c[0]
-            scy =  P.screen_c[1]
-            self.el.add_boundary("{0}_{1}".format(mask_type, diameter_deg), [(scx - r, scy - r), (scx + r, scy + r)], RECT_BOUNDARY)
-
-
+         
             # Create solid background
-            bg_size = diameter + pad + 2 * stim_size
-            bg = Image.new(RGBA, (bg_size, bg_size), MASK_COLOR)
-
+            bg_width  = P.screen_x * 2 #diameter + pad + 2 * stim_size
+            bg_height = P.screen_y * 2
+            bg = Image.new('RGB', (bg_width, bg_height), MASK_COLOR[:3])
 
             # Create an alpha mask
-            tl = pad // 2 + stim_size
-            br = bg_size - tl
-            alpha_mask = Image.new(RGBA, (bg_size, bg_size), TRANSPARENT)
-            ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), WHITE, MASK_COLOR)
+            r  = diameter // 2
+            x1 = (bg_width  // 2) - r
+            y1 = (bg_height // 2) - r
+            x2 = (bg_width  // 2) + r
+            y2 = (bg_height // 2) + r
+            alpha_mask = Image.new('L', (bg_width, bg_height), 255)
+            ImageDraw.Draw(alpha_mask).ellipse((x1, y1, x2, y2), fill=0)
             alpha_mask = alpha_mask.filter( ImageFilter.GaussianBlur(self.mask_blur_width) )
-            alpha_mask = aggdraw_to_numpy_surface(alpha_mask)
-            print(bg_size, tl, br)
+            bg.putalpha(alpha_mask)
 
             # render mask
             mask = aggdraw_to_numpy_surface(bg)
-            mask.mask(alpha_mask)
 
         if mask_type == CENTRAL:
             # Create solid background
             bg_size = diameter + pad
-            bg = Image.new(RGBA, (bg_size, bg_size), MASK_COLOR)
+            bg = Image.new('RGB', (bg_size, bg_size), MASK_COLOR[:3])
             tl = pad // 2
             br = bg_size - tl
 
             # Create an alpha mask
-            alpha_mask = Image.new(RGBA, (bg_size, bg_size), WHITE)
-            ImageDraw.Draw(alpha_mask, RGBA).ellipse((tl, tl, br, br), BLACK)
-            alpha_mask = aggdraw_to_numpy_surface(alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width)))
+            alpha_mask = Image.new('L', (bg_size, bg_size), 0)
+            ImageDraw.Draw(alpha_mask).ellipse((tl, tl, br, br), fill=255)
+            alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width))
+            bg.putalpha(alpha_mask)
 
             # render mask
             mask = aggdraw_to_numpy_surface(bg)
-            mask.mask(alpha_mask, grey_scale=True)
-
+            
+        print(mask_type, time.time()-start_create)
         return mask
 
     def screen_refresh(self):
         position = self.el.gaze()
         fill()
         blit(self.arrangement[1], 5, P.screen_c)
-        if self.mask_type == PERIPHERAL and not self.el.within_boundary(self.mask_label, EL_GAZE_POS):
-            clear()
-        elif not position:
+        if not position:
             clear()
         else:
             if self.mask is not None:
