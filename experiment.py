@@ -28,11 +28,9 @@ PERIPHERAL = "peripheral"
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
 NEUTRAL_COLOR = P.default_fill_color
-TRANSPARENT = (0, 0, 0, 0)
+TRANSPARENT = 0
+OPAQUE = 255
 
-"""
-EXPERIMENT FACTORS & 'METAFACTORS' (ie. between-block variations as against between-trial)
-"""
 
 """
 This code defines a  class that 'extends' the basic KLExperiment class.
@@ -42,16 +40,10 @@ The experiment itself is actually *run* at the end of this document, after it's 
 class PictureDrawingSearch(klibs.Experiment):
     stim_size = 12  # degrees of visual angle
     stim_pad = 0.8 # degrees of visual angle
-    mask_blur_width = 4  # pixels
+    mask_blur_width = 10  # pixels
     maximum_mask_size = 0  # automatically set at run time, do not change
-    search_time = 30  # seconds
+    search_time = 120  # seconds
     fixation = None  # chosen randomly each trial
-    bg_element_size = 0.8  # degrees of visual angle
-    bg_element_pad = 0.6  # degrees of visual angle
-
-    neutral_color = P.default_fill_color
-    pseudo_mask = None
-    trial_start_msg = None
 
     #  trial vars
     timed_out = False
@@ -70,7 +62,6 @@ class PictureDrawingSearch(klibs.Experiment):
         # Stimulus sizes
         
         self.stim_pad = deg_to_px(self.stim_pad)
-        padded_stim_size_px = deg_to_px(self.stim_size) + self.stim_pad + 1
         self.txtm.add_style('q_and_a', 48, WHITE)
         
         # Display loading screen as images and masks are loaded
@@ -83,7 +74,7 @@ class PictureDrawingSearch(klibs.Experiment):
         
         self.keymap = KeyMap("FGSearch_response", ["z","/"], ["circle", "square"], [sdl2.SDLK_z, sdl2.SDLK_SLASH])
         
-        # Load in images
+        # Load in all images in arrangements folder
         
         img_dir = os.path.join(P.image_dir, "arrangements")
         img_names = next(os.walk(img_dir))[2]
@@ -109,13 +100,13 @@ class PictureDrawingSearch(klibs.Experiment):
             if new_max_mask_px > P.screen_y:
                 smaller_than_screen = False
                 self.maximum_mask_size -= 1
-        for size in self.trial_factory.exp_factors[2][1]:
+        for size in self.trial_factory.exp_factors[0][1]:
             if size > self.maximum_mask_size:
                 e_str = "The maximum mask size this monitor can support is {0} degrees.".format(self.maximum_mask_size)
                 raise ValueError(e_str)
                 
         self.masks = {}
-        for size in self.trial_factory.exp_factors[2][1]:
+        for size in self.trial_factory.exp_factors[0][1]:
             pump()
             self.masks["{0}_{1}".format(CENTRAL, size)] = self.mask(size, CENTRAL).render()
             self.masks["{0}_{1}".format(PERIPHERAL, size)] = self.mask(size, PERIPHERAL).render()
@@ -184,22 +175,16 @@ class PictureDrawingSearch(klibs.Experiment):
 
     def trial(self):
         """
-        trial_factors: 1 = mask_type, 2 = target_level, 3 = mask_size, 4 = target_shape]
+        trial_factors: 1 = mask_type, 2 = mask_size
         """
         if P.development_mode:
-            print(self.mask_type, self.target_level, self.mask_size, self.target_shape)
+            print(self.mask_type, self.mask_size)
         
         self.rc.collect()
         resp = self.rc.keypress_listener.response()
         
         if P.development_mode:
             print(resp)
-
-        # handle timeouts
-        if resp[0] == TIMEOUT:
-            clear()
-            alert("Too slow!", False, 1)
-            clear()
 
         #  create readable data as fixation is currrently in (x,y) coordinates
 
@@ -229,50 +214,40 @@ class PictureDrawingSearch(klibs.Experiment):
 
     def mask(self, diameter, mask_type):
         MASK_COLOR = NEUTRAL_COLOR
-        diameter_deg = diameter
         diameter = deg_to_px(diameter)
-        stim_size = deg_to_px(self.stim_size)
-        pad =  self.stim_pad  # note, just borrowing this padding value, its use is not related to the stimuli at all
-        start_create = time.time()
+        blur_width = self.mask_blur_width
         
-        if mask_type == PERIPHERAL:
-         
+        if mask_type != "none":
+            
+            if mask_type == PERIPHERAL:
+                bg_width  = P.screen_x * 2
+                bg_height = P.screen_y * 2
+                inner_fill = TRANSPARENT
+                outer_fill = OPAQUE
+                
+            elif mask_type == CENTRAL:
+                bg_width  = diameter + blur_width * 4 + 2
+                bg_height = bg_width
+                inner_fill = OPAQUE
+                outer_fill = TRANSPARENT
+                
             # Create solid background
-            bg_width  = P.screen_x * 2 #diameter + pad + 2 * stim_size
-            bg_height = P.screen_y * 2
             bg = Image.new('RGB', (bg_width, bg_height), MASK_COLOR[:3])
-
+    
             # Create an alpha mask
             r  = diameter // 2
             x1 = (bg_width  // 2) - r
             y1 = (bg_height // 2) - r
             x2 = (bg_width  // 2) + r
             y2 = (bg_height // 2) + r
-            alpha_mask = Image.new('L', (bg_width, bg_height), 255)
-            ImageDraw.Draw(alpha_mask).ellipse((x1, y1, x2, y2), fill=0)
-            alpha_mask = alpha_mask.filter( ImageFilter.GaussianBlur(self.mask_blur_width) )
+            alpha_mask = Image.new('L', (bg_width, bg_height), outer_fill)
+            ImageDraw.Draw(alpha_mask).ellipse((x1, y1, x2, y2), fill=inner_fill)
+            alpha_mask = alpha_mask.filter( ImageFilter.GaussianBlur(blur_width) )
+    
+            # Apply mask to background and render
             bg.putalpha(alpha_mask)
-
-            # render mask
-            mask = aggdraw_to_numpy_surface(bg)
-
-        if mask_type == CENTRAL:
-            # Create solid background
-            bg_size = diameter + pad
-            bg = Image.new('RGB', (bg_size, bg_size), MASK_COLOR[:3])
-            tl = pad // 2
-            br = bg_size - tl
-
-            # Create an alpha mask
-            alpha_mask = Image.new('L', (bg_size, bg_size), 0)
-            ImageDraw.Draw(alpha_mask).ellipse((tl, tl, br, br), fill=255)
-            alpha_mask = alpha_mask.filter(ImageFilter.GaussianBlur(self.mask_blur_width))
-            bg.putalpha(alpha_mask)
-
-            # render mask
             mask = aggdraw_to_numpy_surface(bg)
             
-        print(mask_type, time.time()-start_create)
         return mask
 
     def screen_refresh(self):
