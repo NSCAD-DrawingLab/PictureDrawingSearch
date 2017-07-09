@@ -32,11 +32,6 @@ CREATE TABLE trials (
 	participant_id integer key not null,
 	block_num integer not null,
 	trial_num integer not null,
-	practicing text not null,
-    image text not null,
-	mask_type text not null,
-    mask_size text not null,
-	rt real not null, -- reaction time
-    response text not null,
-    init_fix text not null
+    arrangement text not null,
+	mask_type text not null
 );

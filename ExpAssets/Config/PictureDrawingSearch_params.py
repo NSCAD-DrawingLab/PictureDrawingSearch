@@ -55,7 +55,7 @@ multi_session_project = False
 collect_demographics = True
 manual_demographics_collection = False
 practicing = False
-trials_per_block = 24
+trials_per_block = 3
 trials_per_practice_block = 0
 blocks_per_experiment = 1
 practice_blocks_per_experiment = 0
@@ -100,3 +100,6 @@ demographic_questions = [
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
+
+central_mask_size = 16
+peripheral_mask_size = 12
