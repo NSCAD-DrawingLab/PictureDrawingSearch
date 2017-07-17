@@ -102,4 +102,4 @@ demographic_questions = [
 #########################################
 
 central_mask_size = 16
-peripheral_mask_size = 12
+peripheral_mask_size = 8

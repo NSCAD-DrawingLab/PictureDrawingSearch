@@ -7,6 +7,7 @@ from klibs.KLUtilities import *
 from klibs.KLUserInterface import any_key
 from klibs.KLGraphics.KLNumpySurface import NumpySurface as ns
 from klibs.KLGraphics import aggdraw_to_numpy_surface, fill, flip, blit, clear
+from klibs.KLAudio import AudioClip
 from klibs.KLCommunication import message, alert
 from klibs.KLKeyMap import KeyMap
 
@@ -67,7 +68,13 @@ class PictureDrawingSearch(klibs.Experiment):
         message("Loading...", "q_and_a", location=P.screen_c, registration=5)
         flip()
         
-        # Initialize keymap for recording responses
+        # Load in warning tone indicating time almost up
+        
+        signal_file = os.path.join(P.resources_dir, "Ping.wav")
+        self.warning_signal = AudioClip(signal_file)
+        self.warning_onset = 5 # seconds after start of trial
+        
+        # Initialize keymap for skipping trials (for dev convenience)
         
         self.keymap = KeyMap("skip_trial", ["Del"], ["skipped"], [sdl2.SDLK_DELETE])
         
@@ -117,13 +124,9 @@ class PictureDrawingSearch(klibs.Experiment):
         pass
     
     def setup_response_collector(self):
-        # Show arrangement for 10 mins (600 sec) if no mask, otherwise
-        # show for 15 mins (900 sec).
-        self.mask_type = self.trial_factors[P.trial_number-1][1]
-        self.picture_duration = 600 if self.mask_type == "none" else 900
-        
+
         self.rc.display_callback = self.screen_refresh
-        self.rc.terminate_after = [self.picture_duration, TK_S]
+        self.rc.terminate_after = [900, TK_S]
         self.rc.uses([RC_KEYPRESS])
         self.rc.keypress_listener.interrupts = True
         self.rc.keypress_listener.key_map = self.keymap
@@ -138,10 +141,14 @@ class PictureDrawingSearch(klibs.Experiment):
         self.arrangement = self.images[self.image_name]
 
         # infer which mask to use and retrieve it
+        self.mask_type = self.trial_factors[P.trial_number-1][1]
         try:
             self.mask = self.masks[self.mask_type]
         except KeyError as e:
             self.mask = None
+            
+        # Reset warning signal flag
+        self.warning_played = False
         
         # Display trial start message and perform drift correct after keypress
         blit(self.trial_start_msg, 5, P.screen_c)
@@ -282,6 +289,9 @@ class PictureDrawingSearch(klibs.Experiment):
         return factor_set
 
     def screen_refresh(self):
+        if self.evm.trial_time >= self.warning_onset and not self.warning_played:
+            self.warning_signal.play()
+            self.warning_played = True
         position = self.el.gaze()
         fill()
         blit(self.arrangement, 5, P.screen_c)
