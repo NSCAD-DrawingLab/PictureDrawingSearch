@@ -103,7 +103,7 @@ class PictureDrawingSearch(klibs.Experiment):
         
         # Load in warning tone indicating time almost up
         
-        signal_file = os.path.join(P.resources_dir, "Ping.wav")
+        signal_file = os.path.join(P.resources_dir, "audio", "Ping.wav")
         self.warning_signal = AudioClip(signal_file)
         self.warning_onset = 840 # seconds after start of trial
         
