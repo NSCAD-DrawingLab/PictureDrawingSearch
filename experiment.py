@@ -64,7 +64,7 @@ class PictureDrawingSearch(klibs.Experiment):
         # Initialize text styles and display loading screen
         
         self.txtm.add_style('q_and_a', 48, WHITE)
-        self.txtm.add_style('instructions', 20, WHITE)
+        self.txtm.add_style('instructions', 24, WHITE)
         self.txtm.add_style('warmup', 28, WHITE)
         
         fill()
@@ -105,7 +105,7 @@ class PictureDrawingSearch(klibs.Experiment):
         
         signal_file = os.path.join(P.resources_dir, "Ping.wav")
         self.warning_signal = AudioClip(signal_file)
-        self.warning_onset = 540 # seconds after start of trial
+        self.warning_onset = 840 # seconds after start of trial
         
         # Initialize keymap for skipping trials (for dev convenience)
         

@@ -1,0 +1,6 @@
+### Additional dependencies for PictureDrawingSearch ###
+
+# To install these automatically, run 'pip install -r requirements.txt' in the project folder
+
+git+https://github.com/pytroll/aggdraw.git#egg=aggdraw
+git+https://github.com/a-hurst/klibs.git#egg=klibs
