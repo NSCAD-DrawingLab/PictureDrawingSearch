@@ -54,6 +54,7 @@ cue_back_size = 1,  # deg of visual angle
 multi_session_project = False
 collect_demographics = True
 manual_demographics_collection = False
+manual_eyelink_setup = True
 practicing = False
 trials_per_block = 3
 trials_per_practice_block = 0
@@ -77,24 +78,6 @@ dm_ignore_local_overrides = False
 data_columns = None
 default_participant_fields = [["userhash", "participant"], "sex", "age", "handedness"]
 default_participant_fields_sf = [["userhash", "participant"], "random_seed", "sex", "age", "handedness"]
-
-#
-#########################################
-# Demographics Questions
-#########################################
-# Note: This list must supply all columns in the configured Participants table except:
-# 	- id
-# 	- participant id
-# 	- random_seed
-#	- klibs_commit (if present)
-#	- created
-# These columns must be present in the participants table (except klibs_commit) and are supplied automatically by klibs
-demographic_questions = [
-	['sex', "What is your sex? \nAnswer with:  (m)ale,(f)emale", ('m', 'M', 'f', 'F'), 'str', random.choice(['m', 'f'])],
-	['handedness', "Are right-handed, left-handed or ambidextrous? \nAnswer with (r)ight, (l)eft or (a)mbidextrous.",
-	 ('r', 'R', 'l', 'L', 'a', 'A'), 'str', 'r'],
-	['age', 'What is  your age?', None, 'int', -1]
-]
 
 #
 #########################################
