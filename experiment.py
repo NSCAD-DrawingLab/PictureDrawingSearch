@@ -8,7 +8,6 @@ from klibs.KLUserInterface import any_key, key_pressed, ui_request
 from klibs.KLGraphics import fill, flip, blit, clear
 from klibs.KLAudio import AudioClip
 from klibs.KLCommunication import message, alert
-from klibs.KLKeyMap import KeyMap
 from klibs.KLTime import CountDown
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -31,7 +30,7 @@ PERIPHERAL = "peripheral"
 
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
-RED = (0, 0, 200, 255)
+RED = (200, 0, 0, 255)
 NEUTRAL_COLOR = P.default_fill_color
 TRANSPARENT = 0
 OPAQUE = 255
@@ -110,12 +109,8 @@ class PictureDrawingSearch(klibs.Experiment):
         
         signal_file = os.path.join(P.resources_dir, "audio", "Ping.wav")
         self.warning_signal = AudioClip(signal_file)
-        self.first_warning_onset = 540 
+        self.first_warning_onset = 540 # seconds after start of trial
         self.second_warning_onset = 840 # seconds after start of trial
-        
-        # Initialize keymap for skipping trials (for dev convenience)
-        
-        self.keymap = KeyMap("skip_trial", ["Del"], ["skipped"], [sdl2.SDLK_DELETE])
         
         # Load in all arrangements in images folder
         
@@ -159,6 +154,7 @@ class PictureDrawingSearch(klibs.Experiment):
         
         self.show_instruction(self.instructions_5, 5, P.screen_c)
 
+
     def __generate_masks(self):
         smaller_than_screen = True
         mask_sizes = [P.central_mask_size, P.peripheral_mask_size]
@@ -177,18 +173,14 @@ class PictureDrawingSearch(klibs.Experiment):
         self.masks["central"]    = self.render_mask(mask_sizes[0], CENTRAL)
         self.masks["peripheral"] = self.render_mask(mask_sizes[1], PERIPHERAL)
 
+
     def block(self):
         pass
     
-    def setup_response_collector(self):
 
-        self.rc.display_callback = self.screen_refresh
-        self.rc.terminate_after = [900, TK_S]
-        self.rc.uses([RC_KEYPRESS])
-        self.rc.keypress_listener.interrupts = True
-        self.rc.keypress_listener.key_map = self.keymap
-        self.rc.flip = False # Disable flipping on each rc loop, since callback already flips
-    
+    def setup_response_collector(self):
+        pass
+
 
     def trial_prep(self):
         # Clear the screen of stimuli before the trial start
@@ -202,7 +194,7 @@ class PictureDrawingSearch(klibs.Experiment):
         self.mask_type = self.trial_factors[P.trial_number-1][1]
         try:
             self.mask = self.masks[self.mask_type]
-        except KeyError as e:
+        except KeyError:
             self.mask = None
             
         # Reset warning signal flag
@@ -257,10 +249,6 @@ class PictureDrawingSearch(klibs.Experiment):
                 if self.mask is not None and trial_countdown.elapsed() < self.mask_off_time:
                     blit(self.mask, 5, pos)
             flip()
-        
-        #self.rc.collect()
-        
-        #resp = self.rc.keypress_listener.response()
 
         return {
             "trial_num":   P.trial_number,
@@ -269,8 +257,10 @@ class PictureDrawingSearch(klibs.Experiment):
             "mask_type":   self.mask_type
         }
 
+
     def trial_clean_up(self):
         pass
+
 
     def clean_up(self):
         # Give the RA the choice of logging or discarding combination of
@@ -431,22 +421,3 @@ class PictureDrawingSearch(klibs.Experiment):
             blit(self.images['warmup.png'], 5, P.screen_c)
             blit(self.warmup_txt[tool], 1, (30, P.screen_y-30))
             flip()
-
-    def screen_refresh(self):
-        if self.evm.trial_time >= self.first_warning_onset and not self.first_warning_played:
-            self.warning_signal.play()
-            self.first_warning_played = True
-        if self.evm.trial_time >= self.second_warning_onset and not self.second_warning_played:
-            self.warning_signal.play()
-            self.second_warning_played = True
-        pos = self.el.gaze()
-        fill()
-        if int(pos[0]) != -32768: # if gaze not lost
-            self.gaze_offscreen = time.time()
-        if (pos[0] < 0) or (pos[0] > P.screen_x) or (pos[1] < 0) or (pos[1] > P.screen_y):
-            pass
-        elif (time.time() - self.gaze_offscreen) < self.gaze_timeout:
-            blit(self.arrangement, 5, P.screen_c)
-            if self.mask is not None and self.evm.trial_time < self.mask_off_time:
-                blit(self.mask, 5, pos)
-        flip()
