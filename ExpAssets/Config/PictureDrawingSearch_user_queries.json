@@ -8,7 +8,7 @@
         {
             "title": "name",
             "database_field": "userhash",
-            "query": "Please enter your unique alphanumeric ID:",
+            "query": "Please enter your first and last name:",
             "accepted": null,
             "allow_null": false,
             "format": {

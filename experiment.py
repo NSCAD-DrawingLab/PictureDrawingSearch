@@ -8,7 +8,6 @@ from klibs.KLUserInterface import any_key, key_pressed, ui_request
 from klibs.KLGraphics import fill, flip, blit, clear
 from klibs.KLAudio import AudioClip
 from klibs.KLCommunication import message, alert
-from klibs.KLKeyMap import KeyMap
 from klibs.KLTime import CountDown
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -31,6 +30,7 @@ PERIPHERAL = "peripheral"
 
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
+RED = (200, 0, 0, 255)
 NEUTRAL_COLOR = P.default_fill_color
 TRANSPARENT = 0
 OPAQUE = 255
@@ -64,8 +64,8 @@ class PictureDrawingSearch(klibs.Experiment):
         # Initialize text styles and display loading screen
         
         self.txtm.add_style('q_and_a', 48, WHITE)
-        self.txtm.add_style('instructions', 24, WHITE)
-        self.txtm.add_style('warmup', 28, WHITE)
+        self.txtm.add_style('instructions', 40, WHITE)
+        self.txtm.add_style('warmup', 36, RED)
         
         fill()
         message("Loading...", "q_and_a", location=P.screen_c, registration=5)
@@ -80,6 +80,7 @@ class PictureDrawingSearch(klibs.Experiment):
         instructions_file_2 = os.path.join(P.resources_dir, "text", "instructions_2.txt")
         instructions_file_3 = os.path.join(P.resources_dir, "text", "instructions_3.txt")
         instructions_file_4 = os.path.join(P.resources_dir, "text", "instructions_4.txt")
+        instructions_file_5 = os.path.join(P.resources_dir, "text", "instructions_5.txt")
         self.instructions_1 = message(
             open(instructions_file_1).read(), 'instructions', wrap_width=text_width, blit_txt=False
         )
@@ -91,6 +92,9 @@ class PictureDrawingSearch(klibs.Experiment):
         )
         self.instructions_4 = message(
             open(instructions_file_4).read(), 'instructions', wrap_width=text_width, blit_txt=False
+        )
+        self.instructions_5 = message(
+            open(instructions_file_5).read(), 'instructions', wrap_width=text_width, blit_txt=False
         )
         
         self.warmup_txt = {}
@@ -105,11 +109,8 @@ class PictureDrawingSearch(klibs.Experiment):
         
         signal_file = os.path.join(P.resources_dir, "audio", "Ping.wav")
         self.warning_signal = AudioClip(signal_file)
-        self.warning_onset = 840 # seconds after start of trial
-        
-        # Initialize keymap for skipping trials (for dev convenience)
-        
-        self.keymap = KeyMap("skip_trial", ["Del"], ["skipped"], [sdl2.SDLK_DELETE])
+        self.first_warning_onset = 540 # seconds after start of trial
+        self.second_warning_onset = 840 # seconds after start of trial
         
         # Load in all arrangements in images folder
         
@@ -151,6 +152,8 @@ class PictureDrawingSearch(klibs.Experiment):
         
         self.show_instruction(self.instructions_4, 5, P.screen_c)
         
+        self.show_instruction(self.instructions_5, 5, P.screen_c)
+
 
     def __generate_masks(self):
         smaller_than_screen = True
@@ -167,21 +170,18 @@ class PictureDrawingSearch(klibs.Experiment):
                 raise ValueError(e_str)
                 
         self.masks = {}
-        self.masks["central"]    = self.mask(mask_sizes[0], CENTRAL)
-        self.masks["peripheral"] = self.mask(mask_sizes[1], PERIPHERAL)
+        self.masks["central"]    = self.render_mask(mask_sizes[0], CENTRAL)
+        self.masks["peripheral"] = self.render_mask(mask_sizes[1], PERIPHERAL)
+
 
     def block(self):
         pass
     
-    def setup_response_collector(self):
 
-        self.rc.display_callback = self.screen_refresh
-        self.rc.terminate_after = [840, TK_S]
-        self.rc.uses([RC_KEYPRESS])
-        self.rc.keypress_listener.interrupts = True
-        self.rc.keypress_listener.key_map = self.keymap
-        self.rc.flip = False # Disable flipping on each rc loop, since callback already flips
-    
+    def setup_response_collector(self):
+        pass
+
+
     def trial_prep(self):
         # Clear the screen of stimuli before the trial start
         clear()
@@ -194,11 +194,12 @@ class PictureDrawingSearch(klibs.Experiment):
         self.mask_type = self.trial_factors[P.trial_number-1][1]
         try:
             self.mask = self.masks[self.mask_type]
-        except KeyError as e:
+        except KeyError:
             self.mask = None
             
         # Reset warning signal flag
-        self.warning_played = False
+        self.first_warning_played = False
+        self.second_warning_played = False
         
         #Reset gaze offscreen flag
         self.gaze_offscreen = time.time()
@@ -209,22 +210,57 @@ class PictureDrawingSearch(klibs.Experiment):
         any_key()
         self.el.drift_correct()
 
+
     def trial(self):
 
         if P.development_mode:
             print(self.image_name, self.mask_type)
-            
-        self.rc.collect()
-        
-        resp = self.rc.keypress_listener.response()
 
-        return {"trial_num":   P.trial_number,
-                "block_num":   P.block_number,
-                "arrangement": self.image_name,
-                "mask_type":   self.mask_type}
+        trial_countdown = CountDown(900) # 15 minutes
+        while trial_countdown.remaining() > 0:
+            q = pump(True)
+            if key_pressed(sdl2.SDLK_DELETE, queue=q):
+                # press 'Del' to skip trial
+                break
+            elif key_pressed(sdl2.SDLK_ESCAPE, queue=q):
+                # Press 'escape' to pause and calibrate
+                trial_countdown.pause()
+                self.el.calibrate()
+                self.el.drift_correct()
+                self.el.start(P.trial_number)
+                trial_countdown.resume()
+                continue
+            
+            if trial_countdown.elapsed() >= self.first_warning_onset and not self.first_warning_played:
+                self.warning_signal.play()
+                self.first_warning_played = True
+            if trial_countdown.elapsed() >= self.second_warning_onset and not self.second_warning_played:
+                self.warning_signal.play()
+                self.second_warning_played = True
+
+            pos = self.el.gaze()
+            fill()
+            if int(pos[0]) != -32768: # if gaze not lost
+                self.gaze_offscreen = time.time()
+            if (pos[0] < 0) or (pos[0] > P.screen_x) or (pos[1] < 0) or (pos[1] > P.screen_y):
+                pass
+            elif (time.time() - self.gaze_offscreen) < self.gaze_timeout:
+                blit(self.arrangement, 5, P.screen_c)
+                if self.mask is not None and trial_countdown.elapsed() < self.mask_off_time:
+                    blit(self.mask, 5, pos)
+            flip()
+
+        return {
+            "trial_num":   P.trial_number,
+            "block_num":   P.block_number,
+            "arrangement": self.image_name,
+            "mask_type":   self.mask_type
+        }
+
 
     def trial_clean_up(self):
         pass
+
 
     def clean_up(self):
         # Give the RA the choice of logging or discarding combination of
@@ -252,7 +288,7 @@ class PictureDrawingSearch(klibs.Experiment):
                 writer.writerow(sum(self.trial_factors, ()))
         
 
-    def mask(self, diameter, mask_type):
+    def render_mask(self, diameter, mask_type):
         MASK_COLOR = NEUTRAL_COLOR
         diameter   = deg_to_px(diameter)
         blur_width = self.mask_blur_width
@@ -349,6 +385,10 @@ class PictureDrawingSearch(klibs.Experiment):
   
     def warm_up(self):
         warmup_timer = CountDown(600, start=True)
+        self.first_signal_played = False
+        self.second_signal_played = False
+        self.third_signal_played = False
+        self.fourth_signal_played = False
         while warmup_timer.counting():
             if key_pressed(sdl2.SDLK_DELETE):
                 break
@@ -357,32 +397,27 @@ class PictureDrawingSearch(klibs.Experiment):
             if t < 60:
                 tool = 'pencil'
             elif 60 <= t < 120:
+            	if not self.first_signal_played:
+            		self.warning_signal.play()
+            		self.first_signal_played = True
                 tool = 'charcoal'
             elif 120 <= t < 180:
+            	if not self.second_signal_played:
+            		self.warning_signal.play()
+            		self.second_signal_played = True
                 tool = 'smudger'
             elif 180 <= t < 240:
+            	if not self.third_signal_played:
+            		self.warning_signal.play()
+            		self.third_signal_played = True
                 tool = 'eraser'
             else:
+                if not self.fourth_signal_played:
+            		self.warning_signal.play()
+            		self.fourth_signal_played = True
                 tool = 'any'
                 
             fill()
             blit(self.images['warmup.png'], 5, P.screen_c)
             blit(self.warmup_txt[tool], 1, (30, P.screen_y-30))
             flip()
-
-    def screen_refresh(self):
-        if self.evm.trial_time >= self.warning_onset and not self.warning_played:
-            self.warning_signal.play()
-            self.warning_played = True
-        pos = self.el.gaze()
-        fill()
-        blit(self.arrangement, 5, P.screen_c)
-        if int(pos[0]) != -32768: # if gaze not lost
-            self.gaze_offscreen = time.time()
-        if (pos[0] < 0) or (pos[0] > P.screen_x) or (pos[1] < 0) or (pos[1] > P.screen_y):
-            pass
-        elif (time.time() - self.gaze_offscreen) < self.gaze_timeout:
-            blit(self.arrangement, 5, P.screen_c)
-            if self.mask is not None and self.evm.trial_time < self.mask_off_time:
-                blit(self.mask, 5, pos)
-        flip()
