@@ -7,7 +7,7 @@ from klibs.KLUtilities import *
 from klibs.KLUserInterface import any_key, key_pressed, ui_request
 from klibs.KLGraphics import fill, flip, blit, clear
 from klibs.KLAudio import AudioClip
-from klibs.KLCommunication import message, alert
+from klibs.KLCommunication import message
 from klibs.KLTime import CountDown
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -62,7 +62,7 @@ class PictureDrawingSearch(klibs.Experiment):
     def setup(self):
         
         # Initialize text styles and display loading screen
-        
+        #self.txtm.add_font('Roboto-Regular')#, font_extension='otf')
         self.txtm.add_style('q_and_a', 48, WHITE)
         self.txtm.add_style('instructions', 40, WHITE)
         self.txtm.add_style('warmup', 36, RED)
@@ -361,7 +361,7 @@ class PictureDrawingSearch(klibs.Experiment):
         # Determine which factor combinations/orders have been run before and
         # randomly select a factor set that hasn't been done yet
         remaining_combinations = list(set(all_combinations)-set(completed_combinations))
-        print "\nRemaining combinations: {0}".format(len(remaining_combinations))
+        print("\nRemaining combinations: {0}".format(len(remaining_combinations)))
         try:
             i = random.choice(remaining_combinations)
         except IndexError:
@@ -397,24 +397,24 @@ class PictureDrawingSearch(klibs.Experiment):
             if t < 60:
                 tool = 'pencil'
             elif 60 <= t < 120:
-            	if not self.first_signal_played:
-            		self.warning_signal.play()
-            		self.first_signal_played = True
+                if not self.first_signal_played:
+                    self.warning_signal.play()
+                    self.first_signal_played = True
                 tool = 'charcoal'
             elif 120 <= t < 180:
-            	if not self.second_signal_played:
-            		self.warning_signal.play()
-            		self.second_signal_played = True
+                if not self.second_signal_played:
+                    self.warning_signal.play()
+                    self.second_signal_played = True
                 tool = 'smudger'
             elif 180 <= t < 240:
-            	if not self.third_signal_played:
-            		self.warning_signal.play()
-            		self.third_signal_played = True
+                if not self.third_signal_played:
+                    self.warning_signal.play()
+                    self.third_signal_played = True
                 tool = 'eraser'
             else:
                 if not self.fourth_signal_played:
-            		self.warning_signal.play()
-            		self.fourth_signal_played = True
+                    self.warning_signal.play()
+                    self.fourth_signal_played = True
                 tool = 'any'
                 
             fill()

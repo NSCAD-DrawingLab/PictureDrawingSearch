@@ -42,7 +42,7 @@
         {
             "title": "sex",
             "database_field": "sex",
-            "query": "What is your sex? \nAnswer with:  (m)ale,(f)emale,(o)ther",
+            "query": "What is your sex?\nAnswer with: (m)ale, (f)emale, or (o)ther",
             "accepted": ["m", "f", "o"],
             "allow_null": false,
             "format": {
@@ -76,7 +76,7 @@
         {
             "title": "handedness",
             "database_field": "handedness",
-            "query": "Are right-handed, left-handed or ambidextrous? \nAnswer with (r)ight, (l)eft or (a)mbidextrous.",
+            "query": "Are you right-handed, left-handed or ambidextrous?\nAnswer with (r)ight, (l)eft, or (a)mbidextrous.",
             "accepted": ["r", "l", "a"],
             "allow_null": false,
             "format": {

@@ -1,11 +1,16 @@
-# PictureDrawingSearch Param overrides
+### Klibs Parameter overrides ###
+
+from klibs import P
 
 #########################################
 # Runtime Settings
 #########################################
 collect_demographics = True
-run_practice_blocks = True
-view_distance = 57 # in centimeters
+manual_demographics_collection = False
+manual_trial_generation = False
+run_practice_blocks = False
+multi_user = False
+view_distance = 57 # in centimeters, 57cm = 1 deg of visual angle per cm of screen
 
 #########################################
 # Available Hardware
@@ -54,8 +59,9 @@ dm_show_gaze_dot = True
 #########################################
 primary_table = "trials"
 unique_identifier = "userhash"
-default_participant_fields = [["userhash", "participant"], "sex", "age", "handedness"]
-default_participant_fields_sf = [["userhash", "participant"], "random_seed", "sex", "age", "handedness"]
+exclude_data_cols = ["created"]
+append_info_cols = ["random_seed"]
+datafile_ext = ".txt"
 
 #########################################
 # PROJECT-SPECIFIC VARS

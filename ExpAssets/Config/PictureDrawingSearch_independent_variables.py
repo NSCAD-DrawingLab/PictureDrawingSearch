@@ -1,13 +1,11 @@
-__author__ = 'Austin Hurst'
 from klibs.KLIndependentVariable import IndependentVariableSet, IndependentVariable
 
 
 # Initialize object containing project's independant variables
 
-FigureGroundSearch_ind_vars = IndependentVariableSet()
+PictureDrawingSearch_ind_vars = IndependentVariableSet()
 
 
-# Define project variables and variable types
+# Define project variables and variable types (variables not set dynamically in this project)
 
-FigureGroundSearch_ind_vars.add_variable("mask_type",    str, ["central", "peripheral", "none"])
-FigureGroundSearch_ind_vars.add_variable("mask_size",    int, [8, 12, 16])
+PictureDrawingSearch_ind_vars.add_variable("nullvar", str, ["null"])
