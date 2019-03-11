@@ -29,3 +29,13 @@ PictureDrawingSearch is a KLibs experiment, meaning that it is run using the `kl
 
 To run the experiment, navigate to the PictureDrawingSearch folder in Terminal and run `klibs run [screensize]`,
 replacing `[screensize]` with the diagonal size of your display in inches (e.g. `klibs run 24` for a 24-inch monitor). If you just want to test the program out for yourself and skip demographics collection, you can add the `-d` flag to the end of the command to launch the experiment in development mode.
+
+### Exporting Data
+
+To export data from PictureDrawingSearch, simply run
+
+```
+klibs export
+```
+
+while in the PictureDrawingSearch directory. This will export the trial data for each participant into individual tab-separated text files in the project's `ExpAssets/Data` subfolder.
